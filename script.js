@@ -2,15 +2,15 @@
 // CONFIGURATION: REPLACE THESE PLACEHOLDERS
 // ====================================================================
 
-
-// NEW AGGRESSIVE WORKAROUND URL FORMAT
-// Replace YOUR_SCRIPT_ID_HERE with the ID you copied from Project Settings.
-// NEW API URL: Points to the Netlify serverless function
+// API URL now points to the Netlify Function proxy
 const API_URL = "/.netlify/functions/fetch-data"; 
 
+// The secret key is now ONLY for the client-side check to enable the form.
+// The real security check happens on the Google Apps Script server.
+const CLIENT_SIDE_AUTH_KEY = "123"; 
 
-//Replace with the exact key defined in Code.gs
-const SECRET_WRITE_KEY = "123"; 
+// We DO NOT define SECRET_WRITE_KEY here anymore.
+// We'll rely on the value entered by the user.
 
 // ====================================================================
 // DOM ELEMENTS
@@ -20,15 +20,18 @@ const TABLE_BODY = document.querySelector('#data-table tbody');
 const TABLE_HEAD = document.querySelector('#data-table thead');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
+const AUTH_BUTTON = document.querySelector('button[onclick="showInputForm()"]');
+const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
 
 
 // ====================================================================
-// 1. READ OPERATION (Fetch Data)
+// 1. READ OPERATION (Fetch Data) - (Logic remains the same)
 // ====================================================================
 
 async function fetchData() {
     document.getElementById('loading-status').textContent = 'Fetching data...';
     try {
+        // Fetching data via the Netlify Function proxy
         const response = await fetch(API_URL, {
             method: 'GET',
             mode: 'cors' 
@@ -36,6 +39,7 @@ async function fetchData() {
 
         const result = await response.json();
 
+        // Check for success status returned by the Apps Script via Netlify
         if (result.status === 'success' && result.data) {
             if (result.data.length > 0) {
                 renderTable(result.data);
@@ -44,6 +48,7 @@ async function fetchData() {
                  document.getElementById('loading-status').textContent = 'Sheet is empty.';
             }
         } else {
+            // Display error message from the API/Netlify function
             document.getElementById('loading-status').textContent = `API Error: ${result.message}`;
         }
 
@@ -84,12 +89,43 @@ function renderTable(data) {
 
 
 // ====================================================================
-// 2. WRITE OPERATION (Submit Data & Authorization)
+// 3. UI Toggling & Client-Side Authorization Check (UPDATED)
+// ====================================================================
+
+function showInputForm() {
+    const enteredKey = AUTH_KEY_INPUT.value;
+    
+    // Client-side key check for better user experience
+    if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
+        // 1. If key is correct, show the data form and hide controls
+        FORM.style.display = 'block';
+        AUTH_KEY_INPUT.style.display = 'none';
+        AUTH_BUTTON.style.display = 'none';
+        AUTH_LABEL.textContent = 'Write Access Granted.';
+        alert('Write access enabled! Please fill out the form.');
+    } else {
+        // 2. If key is incorrect, deny access
+        alert('Authorization failed. Please enter the correct secret key.');
+        AUTH_KEY_INPUT.value = '';
+    }
+}
+
+
+// ====================================================================
+// 2. WRITE OPERATION (Submit Data & Authorization) - (UPDATED)
 // ====================================================================
 
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
+
+    // CRITICAL: Get the submitted key from the input field
+    const keyToSubmit = AUTH_KEY_INPUT.value;
+    
+    if (!keyToSubmit) {
+        MESSAGE_ELEMENT.textContent = '❌ Error: Key missing from payload. Please refresh.';
+        return;
+    }
 
     // Collect all form data, including the secret key
     const dataToSend = {
@@ -98,18 +134,15 @@ FORM.addEventListener('submit', async function(event) {
         "Date Recorded": document.getElementById('date_recorded').value,
         "Current Status": document.getElementById('new_status').value, 
         
-        // The authorization key sent to the Apps Script:
-        "authKey": SECRET_WRITE_KEY // Uses the hardcoded key from the config
+        // The authorization key sent to the Apps Script (the server performs the REAL check)
+        "authKey": keyToSubmit 
     };
-    
-    // NOTE: If you decide to let the user type the key into the UI, 
-    // you would use: "authKey": AUTH_KEY_INPUT.value 
-    // But keeping it hardcoded here prevents Dept B from seeing the key easily.
 
     try {
+        // Submit data via the Netlify Function proxy
         const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'cors',
+            mode: 'cors', // Still needed for browser safety, even though server handles cross-origin
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -124,7 +157,7 @@ FORM.addEventListener('submit', async function(event) {
             // Refresh the table to show the new data immediately
             await fetchData(); 
         } else {
-            // This is where the Authorization failed message will appear if the key is wrong
+            // This displays the rejection message from the Apps Script server (e.g., 'Authorization failed...')
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
         }
 
@@ -133,22 +166,6 @@ FORM.addEventListener('submit', async function(event) {
         console.error("Submission error:", error);
     }
 });
-
-
-// ====================================================================
-// 3. UI Toggling (Simplified)
-// ====================================================================
-
-// Since the security check is now server-side, this function simply shows the form.
-// For the most security, we've hardcoded the SECRET_WRITE_KEY into the script, 
-// meaning Department A does NOT have to type it in the UI.
-function showInputForm() {
-    document.getElementById('data-input').style.display = 'block';
-    // Hide the input box for the key if it's hardcoded above
-    AUTH_KEY_INPUT.style.display = 'none'; 
-    document.querySelector('button[onclick="showInputForm()"]').style.display = 'none';
-    alert('Write access enabled.');
-}
 
 
 // Start the process when the page loads
