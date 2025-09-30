@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Department Data Portal</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <h1>Shared Department Data</h1>
+
+    <section id="data-view">
+        <h2>Current Data Snapshot</h2>
+        <p id="loading-status">Loading data...</p>
+        <table id="data-table">
+            <thead>
+                </thead>
+            <tbody>
+                </tbody>
+        </table>
+    </section>
+    
+    <hr>
+
+    <section id="data-input">
+        <h2>Record New Data (Department A Only)</h2>
+        <label for="auth-key">Secret Key (for writing):</label>
+        <input type="password" id="auth-key" value="">
+        <button onclick="showInputForm()">Enable Input</button>
+        
+        <form id="record-form" style="display: none;">
+            <label for="project_name">Project Name:</label>
+            <input type="text" id="project_name" required><br><br>
+
+            <label for="date_recorded">Date Recorded:</label>
+            <input type="date" id="date_recorded" required><br><br>
+
+            <label for="new_status">Current Status:</label>
+            <input type="text" id="new_status"><br><br> 
+
+            <button type="submit">Submit New Record</button>
+            <p id="submission-message"></p>
+        </form>
+    </section>
+
+    <script src="script.js"></script>
+</body>
+</html>
