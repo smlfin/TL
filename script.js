@@ -3,7 +3,7 @@
 // ====================================================================
 
 // 1. CRITICAL: Replace with your actual deployed Apps Script Web app URL
-const API_URL = "https://script.google.com/macros/s/AKfycbzQlxwsJ0YwrejSrojFa9AEHYlvJ1LGCjhfniKtKgberIxwZZZm7PB9x3gEuJcf28eNfQ/exec"; 
+const API_URL = "https://script.google.com/macros/s/AKfycbzY0rJE1qVnLXy2DuA9xGhan757Sgu3Huw3-9KzepU9WEsp8Gf1r8jWDKIE5fKs7-Eu0w/exec"; 
 
 // 2. CRITICAL: Replace with the exact key defined in Code.gs
 const SECRET_WRITE_KEY = "123"; 
