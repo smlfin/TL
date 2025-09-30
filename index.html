@@ -29,14 +29,25 @@
         <button onclick="showInputForm()">Enable Input</button>
         
         <form id="record-form" style="display: none;">
-            <label for="project_name">Project Name:</label>
-            <input type="text" id="project_name" required><br><br>
+            
+            <div id="dynamic-fields">
+                <h3>Enter Column Name and Data Value:</h3>
+                
+                <label for="header_1">Column Header 1:</label>
+                <input type="text" id="header_1" value="Project Name" required>
+                <label for="data_1">Data Value 1:</label>
+                <input type="text" id="data_1" value="" required><br><br>
 
-            <label for="date_recorded">Date Recorded:</label>
-            <input type="date" id="date_recorded" required><br><br>
+                <label for="header_2">Column Header 2:</label>
+                <input type="text" id="header_2" value="Date Recorded" required>
+                <label for="data_2">Data Value 2:</label>
+                <input type="date" id="data_2" value="" required><br><br>
 
-            <label for="new_status">Current Status:</label>
-            <input type="text" id="new_status"><br><br> 
+                <label for="header_3">Column Header 3:</label>
+                <input type="text" id="header_3" value="Current Status" required>
+                <label for="data_3">Data Value 3:</label>
+                <input type="text" id="data_3" value="" required><br><br>
+            </div> 
 
             <button type="submit">Submit New Record</button>
             <p id="submission-message"></p>

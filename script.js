@@ -9,9 +9,6 @@ const API_URL = "/.netlify/functions/fetch-data";
 // The real security check happens on the Google Apps Script server.
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
-// We DO NOT define SECRET_WRITE_KEY here anymore.
-// We'll rely on the value entered by the user.
-
 // ====================================================================
 // DOM ELEMENTS
 // ====================================================================
@@ -22,6 +19,7 @@ const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
 const AUTH_BUTTON = document.querySelector('button[onclick="showInputForm()"]');
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
+const DYNAMIC_FIELDS_COUNT = 3; // Corresponds to header_1/data_1 up to header_3/data_3
 
 
 // ====================================================================
@@ -64,6 +62,8 @@ function renderTable(data) {
     TABLE_BODY.innerHTML = '';
 
     // Data structure is guaranteed to be an Array of Objects from the API.
+    if (data.length === 0) return; // Exit if no data
+    
     const headers = Object.keys(data[0]);
 
     // 2. Render Headers
@@ -89,7 +89,7 @@ function renderTable(data) {
 
 
 // ====================================================================
-// 3. UI Toggling & Client-Side Authorization Check (UPDATED)
+// 2. UI Toggling & Client-Side Authorization Check (Logic remains the same)
 // ====================================================================
 
 function showInputForm() {
@@ -112,7 +112,7 @@ function showInputForm() {
 
 
 // ====================================================================
-// 2. WRITE OPERATION (Submit Data & Authorization) - (UPDATED)
+// 3. WRITE OPERATION (Submit Data & Authorization) - (FIXED DYNAMIC MAPPING)
 // ====================================================================
 
 FORM.addEventListener('submit', async function(event) {
@@ -127,22 +127,39 @@ FORM.addEventListener('submit', async function(event) {
         return;
     }
 
-    // Collect all form data, including the secret key
-    const dataToSend = {
-        // Form fields defined in index.html:
-        "Project Name": document.getElementById('project_name').value, 
-        "Date Recorded": document.getElementById('date_recorded').value,
-        "Current Status": document.getElementById('new_status').value, 
-        
-        // The authorization key sent to the Apps Script (the server performs the REAL check)
-        "authKey": keyToSubmit 
-    };
+    const dataToSend = {}; // Initialize empty object for dynamic data
+
+    // 1. DYNAMICALLY BUILD THE PAYLOAD
+    // Iterate through the defined number of header/data input pairs
+    for (let i = 1; i <= DYNAMIC_FIELDS_COUNT; i++) {
+        const headerElement = document.getElementById(`header_${i}`);
+        const dataElement = document.getElementById(`data_${i}`);
+
+        if (headerElement && dataElement) {
+            const headerName = headerElement.value.trim();
+            const dataValue = dataElement.value;
+            
+            // CRITICAL: The header name from the input field becomes the JSON KEY
+            if (headerName) {
+                dataToSend[headerName] = dataValue;
+            }
+        }
+    }
+    
+    // 2. Include the Authorization Key
+    dataToSend["authKey"] = keyToSubmit; 
+
+    // 3. Final sanity check
+    if (Object.keys(dataToSend).length <= 1) { // Only authKey was found
+        MESSAGE_ELEMENT.textContent = '❌ Error: No data fields provided. Check your inputs.';
+        return;
+    }
 
     try {
         // Submit data via the Netlify Function proxy
         const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'cors', // Still needed for browser safety, even though server handles cross-origin
+            mode: 'cors', 
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -157,7 +174,7 @@ FORM.addEventListener('submit', async function(event) {
             // Refresh the table to show the new data immediately
             await fetchData(); 
         } else {
-            // This displays the rejection message from the Apps Script server (e.g., 'Authorization failed...')
+            // This displays the rejection message from the Apps Script server
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
         }
 
