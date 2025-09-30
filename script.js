@@ -10,8 +10,12 @@ const CLIENT_SIDE_AUTH_KEY = "123";
 
 // ====================================================================
 // FIELD MAPPING CONFIGURATION (FIXED Section 9 HEADERS)
+<<<<<<< HEAD
 // Note: Header keys must EXACTLY match the Google Sheet Row 1.
 // The Section 9 headers are assumed to be renamed in the sheet to handle duplicates.
+=======
+// Note: Header keys MUST MATCH the Google Sheet Row 1 exactly.
+>>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
 // ====================================================================
 const DISPLAY_BLOCKS = [
     {
@@ -53,21 +57,37 @@ const DISPLAY_BLOCKS = [
             "B/G": "Borrower / Guarantor",
             "BANK": "BANK",
             "REMARKS": "REMARKS",
+<<<<<<< HEAD
             "ADVOCATE": "ADVOCATE", // This references the first "ADVOCATE" column
             "HANDED OVER DATE": "HANDED OVER DATE",
             "Notice Remarks": "Notice Remarks",
             "CASE FILED": "CASE FILED",
             "CASE NO": "CASE NO", // This references the first "CASE NO" column
+=======
+            "ADVOCATE": "ADVOCATE", 
+            "HANDED OVER DATE": "HANDED OVER DATE",
+            "Notice Remarks": "Notice Remarks",
+            "CASE FILED": "CASE FILED",
+            "CASE NO": "CASE NO", 
+>>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
         }
     },
     {
         title: "4) Section 9",
         fields: {
+<<<<<<< HEAD
             "Sec 09 Filing Date": "Sec-09 Filing Date",
             "Sec 09 Filing Amt": "Sec-09 Filing Amount",
             // *** UPDATED KEYS - MUST MATCH NEW SHEET HEADERS ***
             "Advocate9": "Advocate", // Renamed in Sheet
             "CASE NO9": "CASE NO", // Renamed in Sheet
+=======
+            "Sec 09 Filing Date": "Sec 09 Filing Date",
+            "Sec 09 Filing Amt": "Sec 09 Filing Amt",
+            // *** MAPPING NEW UNIQUE HEADERS ***
+            "Advocate (Sec 09)": "Advocate", 
+            "CASE NO (Sec 09)": "CASE NO", 
+>>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -249,4 +269,8 @@ FORM.addEventListener('submit', async function(event) {
 
 
 // Start the process when the page loads (no initial fetch is needed now)
+<<<<<<< HEAD
 // document.addEventListener('DOMContentLoaded', searchLoan);
+=======
+// document.addEventListener('DOMContentLoaded', searchLoan);
+>>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
