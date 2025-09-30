@@ -3,7 +3,9 @@
 // ====================================================================
 
 // 1. CRITICAL: Replace with your actual deployed Apps Script Web app URL
-const API_URL = "https://script.google.com/macros/s/AKfycbzQlxwsJ0YwrejSrojFa9AEHYlvJ1LGCjhfniKtKgberIxwZZZm7PB9x3gEuJcf28eNfQ/exec"; 
+// NEW AGGRESSIVE WORKAROUND URL FORMAT
+// Replace YOUR_SCRIPT_ID_HERE with the ID you copied from Project Settings.
+const API_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/dev?alt=json";
 
 // 2. CRITICAL: Replace with the exact key defined in Code.gs
 const SECRET_WRITE_KEY = "123"; 
