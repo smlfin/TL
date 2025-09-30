@@ -30,23 +30,14 @@
         
         <form id="record-form" style="display: none;">
             
-            <div id="dynamic-fields">
-                <h3>Enter Column Name and Data Value:</h3>
+            <div id="dynamic-field">
+                <h3>Enter Column Header and Data:</h3>
                 
-                <label for="header_1">Column Header 1:</label>
-                <input type="text" id="header_1" value="Project Name" required>
-                <label for="data_1">Data Value 1:</label>
-                <input type="text" id="data_1" value="" required><br><br>
+                <label for="header_name">Column Header Name:</label>
+                <input type="text" id="header_name" value="Project Name" required><br><br>
 
-                <label for="header_2">Column Header 2:</label>
-                <input type="text" id="header_2" value="Date Recorded" required>
-                <label for="data_2">Data Value 2:</label>
-                <input type="date" id="data_2" value="" required><br><br>
-
-                <label for="header_3">Column Header 3:</label>
-                <input type="text" id="header_3" value="Current Status" required>
-                <label for="data_3">Data Value 3:</label>
-                <input type="text" id="data_3" value="" required><br><br>
+                <label for="data_value">Data Value:</label>
+                <input type="text" id="data_value" value="" required><br><br>
             </div> 
 
             <button type="submit">Submit New Record</button>
