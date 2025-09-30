@@ -2,16 +2,12 @@
 // CONFIGURATION: REPLACE THESE PLACEHOLDERS
 // ====================================================================
 
-// 1. CRITICAL: Replace with your actual deployed Apps Script Web app URL
-<<<<<<< HEAD
+
 // NEW AGGRESSIVE WORKAROUND URL FORMAT
 // Replace YOUR_SCRIPT_ID_HERE with the ID you copied from Project Settings.
 const API_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/dev?alt=json";
-=======
-const API_URL = "https://script.google.com/macros/s/AKfycbzY0rJE1qVnLXy2DuA9xGhan757Sgu3Huw3-9KzepU9WEsp8Gf1r8jWDKIE5fKs7-Eu0w/exec"; 
->>>>>>> 9fdef935de2c9d3f3391241c7024a4f4c87d9ea4
 
-// 2. CRITICAL: Replace with the exact key defined in Code.gs
+//Replace with the exact key defined in Code.gs
 const SECRET_WRITE_KEY = "123"; 
 
 // ====================================================================
