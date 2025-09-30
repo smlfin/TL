@@ -3,21 +3,27 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Department Data Portal</title>
+    <title>Loan Data Portal</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Shared Department Data</h1>
+    <h1>Loan Data Search Portal</h1>
 
-    <section id="data-view">
-        <h2>Current Data Snapshot</h2>
-        <p id="loading-status">Loading data...</p>
-        <table id="data-table">
-            <thead>
-                </thead>
-            <tbody>
-                </tbody>
-        </table>
+    <section id="data-search">
+        <h2>Loan Search</h2>
+        <label for="loan-no-input">Enter Loan No (e.g., C001):</label>
+        <input type="text" id="loan-no-input" value="" placeholder="Enter Loan No..." required>
+        <button id="search-button">Search Loan</button>
+        <p id="loading-status"></p>
+    </section>
+
+    <section id="data-view-blocks" style="display: none;">
+        <h2>Loan File Details: <span id="display-loan-no"></span></h2>
+        
+        <div id="data-blocks">
+            </div>
+        
+        <p id="not-found-message" style="display: none; color: var(--color-danger); font-weight: bold;"></p>
     </section>
     
     <hr>
@@ -29,12 +35,11 @@
         <button onclick="showInputForm()">Enable Input</button>
         
         <form id="record-form" style="display: none;">
-            
             <div id="dynamic-field">
                 <h3>Enter Column Header and Data:</h3>
                 
                 <label for="header_name">Column Header Name:</label>
-                <input type="text" id="header_name" value="Project Name" required><br><br>
+                <input type="text" id="header_name" value="New Column Name" required><br><br>
 
                 <label for="data_value">Data Value:</label>
                 <input type="text" id="data_value" value="" required><br><br>
