@@ -1,134 +1,98 @@
-// **CRITICAL: Replace this with your actual deployed Apps Script Web app URL**
-const API_URL = "https://script.google.com/macros/s/AKfycbzqY3jB718XUHuExG3VONTc5WmhZpumtu0hn3i5o-ba4OtnDUvsd_h9XPN5WR_sWPhwrw/exec"; 
-const FORM = document.getElementById('record-form');
-const TABLE_BODY = document.querySelector('#data-table tbody');
-const TABLE_HEAD = document.querySelector('#data-table thead');
-const MESSAGE_ELEMENT = document.getElementById('submission-message');
+// Function to handle the POST request for writing data
+function doPost(e) {
+  const SPREADSHEET_ID = "1lhoLm2dmePsc_7ZHexVOsALrCXM-2l5BBbFZ54jrSVc";
+  const SHEET_NAME = "Sheet1";
+  
+  // Set CORS headers for the response
+  const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*', // Allows all origins (safest for internal use)
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
 
-// --- 1. READ OPERATION (Fetch Data) ---
+  try {
+    // 1. Parse the incoming JSON data
+    // Use getContents() for raw data from external fetch
+    const requestData = JSON.parse(e.postData.contents);
+    
+    // 2. Authentication (Optional, but highly recommended)
+    // if (requestData.authKey !== "YOUR_SECRET_KEY") { 
+    //    return createJsonResponse({ status: 'error', message: 'Unauthorized key.' }, 401, CORS_HEADERS); 
+    // }
 
-async function fetchData() {
-    document.getElementById('loading-status').textContent = 'Fetching data...';
-    try {
-        const response = await fetch(API_URL, {
-            method: 'GET',
-            // Important for Apps Script security, though less critical for doGet
-            mode: 'cors' 
-        });
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    const sheet = ss.getSheetByName(SHEET_NAME);
+    
+    // Get ALL existing headers (Row 1)
+    const headers = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0];
+    
+    const incomingFields = Object.keys(requestData);
+    const dataToWrite = [];
+    let currentHeaders = [...headers];
 
-        const result = await response.json();
-
-        if (result.status === 'success' && result.data.length > 0) {
-            renderTable(result.data);
-            document.getElementById('loading-status').textContent = `Data loaded successfully (${result.data.length} records).`;
-        } else {
-            document.getElementById('loading-status').textContent = 'No data found or empty sheet.';
+    // 3. Dynamic Column and Data Mapping (Same as before)
+    for (const field of incomingFields) {
+      if (!currentHeaders.includes(field)) {
+        // New field found! Add it as a new column header.
+        const newColumnIndex = currentHeaders.length + 1;
+        sheet.getRange(1, newColumnIndex).setValue(field);
+        currentHeaders.push(field); 
+      }
+    }
+    
+    // 4. Prepare the Row Data based on FINAL headers
+    for (let i = 0; i < currentHeaders.length; i++) {
+        const header = currentHeaders[i];
+        // Ensure you don't write the authKey if it's sent
+        if (header !== 'authKey') {
+            const value = requestData[header] !== undefined ? requestData[header] : "";
+            dataToWrite.push(value);
         }
-
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        document.getElementById('loading-status').textContent = 'Error loading data. Check console for details.';
     }
-}
+    
+    // 5. Append the new row
+    sheet.appendRow(dataToWrite);
 
-function renderTable(data) {
-    // 1. Clear previous content
-    TABLE_HEAD.innerHTML = '';
-    TABLE_BODY.innerHTML = '';
+    // Return success response with CORS headers
+    return createJsonResponse({ status: 'success', message: 'Data recorded and columns updated.', record: requestData }, 200, CORS_HEADERS);
 
-    // Data structure is guaranteed to be an Array of Objects.
-    const headers = Object.keys(data[0]);
-
-    // 2. Render Headers
-    const headerRow = document.createElement('tr');
-    headers.forEach(header => {
-        const th = document.createElement('th');
-        th.textContent = header;
-        headerRow.appendChild(th);
-    });
-    TABLE_HEAD.appendChild(headerRow);
-
-    // 3. Render Data Rows
-    data.forEach(record => {
-        const row = document.createElement('tr');
-        headers.forEach(header => {
-            const cell = document.createElement('td');
-            // Handle null/undefined data gracefully
-            cell.textContent = record[header] || ''; 
-            row.appendChild(cell);
-        });
-        TABLE_BODY.appendChild(row);
-    });
+  } catch (error) {
+    Logger.log("POST Error: " + error.toString());
+    // Return error response with CORS headers
+    return createJsonResponse({ status: 'error', message: error.toString() }, 500, CORS_HEADERS);
+  }
 }
 
 
-// --- 2. WRITE OPERATION (Submit Data) ---
+// --- NEW UTILITY FUNCTIONS ---
 
-FORM.addEventListener('submit', async function(event) {
-    event.preventDefault();
-    MESSAGE_ELEMENT.textContent = 'Submitting...';
-
-    // The data object must use keys that match the desired Google Sheet header names.
-    const dataToSend = {
-        // IMPORTANT: The key names here should match the desired column headers 
-        // in your Google Sheet (A-AP for existing, AQ+ for new).
-        "Project Name": document.getElementById('project_name').value, 
-        "Date Recorded": document.getElementById('date_recorded').value,
-        // If "Current Status" doesn't exist in AQ+, the Apps Script will create the column!
-        "Current Status": document.getElementById('new_status').value, 
-        // You can add data for A-AP columns too if needed, but it's often best 
-        // to only send AQ+ data for new records.
-    };
-
-    try {
-        const authKey = document.getElementById('auth-key').value;
-        
-        // You can add the authKey to the data payload or URL parameters for your Apps Script 
-        // to check it, if you enabled a custom authorization check in doPost(e).
-        // For now, we'll rely on the API URL being somewhat hidden.
-
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            MESSAGE_ELEMENT.textContent = '✅ Record successfully saved! Refreshing data...';
-            // Clear the form after success
-            FORM.reset(); 
-            // Refresh the table to show the new data immediately
-            await fetchData(); 
-        } else {
-            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`;
-        }
-
-    } catch (error) {
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API.';
-        console.error("Submission error:", error);
-    }
-});
-
-
-// --- 3. Authorization/UI Toggling ---
-
-function showInputForm() {
-    const authKey = document.getElementById('auth-key').value;
-    // Simple client-side check. Implement the real check in doPost() later.
-    if (authKey === 'secret123') { // CHANGE 'secret123' to your actual key
-        document.getElementById('record-form').style.display = 'block';
-        alert('Input enabled! Please submit your data.');
-    } else {
-        alert('Incorrect secret key. Write access denied.');
-        document.getElementById('record-form').style.display = 'none';
-    }
+// 1. Function to handle the CORS pre-flight request
+// This is essential for external POST requests
+function doOptions(e) {
+  const CORS_HEADERS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
+  return ContentService.createTextOutput('')
+      .setHeaders(CORS_HEADERS);
 }
 
+// 2. Helper to create a JSON response with proper headers
+function createJsonResponse(data, status, headers) {
+  const output = ContentService.createTextOutput(JSON.stringify(data))
+      .setMimeType(ContentService.MimeType.JSON);
+  
+  // Apply headers
+  for (const header in headers) {
+    output.setHeaders({[header]: headers[header]});
+  }
+  
+  // Note: Apps Script doesn't directly set HTTP status code, 
+  // but setting the headers is enough for CORS success.
+  return output;
+}
 
-// Start the process when the page loads
-document.addEventListener('DOMContentLoaded', fetchData);
+// NOTE: Your doGet(e) function should also be modified to use the createJsonResponse
+// and include the CORS headers for consistency, although GET requests are often 
+// less strict about CORS than POST requests.
