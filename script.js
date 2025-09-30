@@ -5,7 +5,9 @@
 
 // NEW AGGRESSIVE WORKAROUND URL FORMAT
 // Replace YOUR_SCRIPT_ID_HERE with the ID you copied from Project Settings.
-const API_URL = "https://script.google.com/macros/s/YOUR_SCRIPT_ID_HERE/dev?alt=json";
+// NEW API URL: Points to the Netlify serverless function
+const API_URL = "/.netlify/functions/fetch-data"; 
+
 
 //Replace with the exact key defined in Code.gs
 const SECRET_WRITE_KEY = "123"; 
