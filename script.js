@@ -9,8 +9,9 @@ const API_URL = "/.netlify/functions/fetch-data";
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
 // ====================================================================
-// FIELD MAPPING CONFIGURATION (NEW)
-// Defines the display structure and names for the fetched data.
+// FIELD MAPPING CONFIGURATION (FIXED Section 9 HEADERS)
+// Note: Header keys must EXACTLY match the Google Sheet Row 1.
+// The Section 9 headers are assumed to be renamed in the sheet to handle duplicates.
 // ====================================================================
 const DISPLAY_BLOCKS = [
     {
@@ -52,11 +53,11 @@ const DISPLAY_BLOCKS = [
             "B/G": "Borrower / Guarantor",
             "BANK": "BANK",
             "REMARKS": "REMARKS",
-            "ADVOCATE": "ADVOCATE",
+            "ADVOCATE": "ADVOCATE", // This references the first "ADVOCATE" column
             "HANDED OVER DATE": "HANDED OVER DATE",
             "Notice Remarks": "Notice Remarks",
             "CASE FILED": "CASE FILED",
-            "CASE NO": "CASE NO",
+            "CASE NO": "CASE NO", // This references the first "CASE NO" column
         }
     },
     {
@@ -64,8 +65,9 @@ const DISPLAY_BLOCKS = [
         fields: {
             "Sec 09 Filing Date": "Sec 09 Filing Date",
             "Sec 09 Filing Amt": "Sec 09 Filing Amt",
-            "Advocate": "Advocate",
-            "CASE NO": "CASE NO",
+            // *** UPDATED KEYS - MUST MATCH NEW SHEET HEADERS ***
+            "Advocate (Sec 09)": "Advocate", // Renamed in Sheet
+            "CASE NO (Sec 09)": "CASE NO", // Renamed in Sheet
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -80,7 +82,7 @@ const DISPLAY_BLOCKS = [
 ];
 
 // ====================================================================
-// DOM ELEMENTS
+// DOM ELEMENTS (Unchanged)
 // ====================================================================
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
@@ -88,7 +90,6 @@ const AUTH_KEY_INPUT = document.getElementById('auth-key');
 const AUTH_BUTTON = document.querySelector('button[onclick="showInputForm()"]');
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
 
-// NEW Search Elements
 const LOAN_INPUT = document.getElementById('loan-no-input');
 const SEARCH_BUTTON = document.getElementById('search-button');
 const LOADING_STATUS = document.getElementById('loading-status');
@@ -97,7 +98,6 @@ const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
 
-// Write Form Elements
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
@@ -120,7 +120,6 @@ async function searchLoan() {
     NOT_FOUND_MESSAGE.style.display = 'none';
 
     try {
-        // We now pass the loan_no as a query parameter
         const response = await fetch(`${API_URL}?loan_no=${encodeURIComponent(loanNo)}`, {
             method: 'GET',
             mode: 'cors' 
@@ -129,11 +128,9 @@ async function searchLoan() {
         const result = await response.json();
 
         if (result.status === 'success' && result.data && result.data.length > 0) {
-            // The API should return an array with ONE record
             renderBlocks(result.data[0]);
             LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
         } else {
-            // Data array is empty or status is error
             LOADING_STATUS.textContent = 'Search complete.';
             DATA_BLOCKS_CONTAINER.innerHTML = '';
             NOT_FOUND_MESSAGE.textContent = `❌ No record found for Loan No: ${loanNo}.`;
@@ -160,8 +157,8 @@ function renderBlocks(record) {
         title.textContent = blockConfig.title;
         block.appendChild(title);
 
-        // Iterate over the fields defined for this block
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
+            // Note: sheetHeader is the exact key from the Apps Script JSON payload
             const value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             const item = document.createElement('div');
@@ -185,7 +182,7 @@ function renderBlocks(record) {
 }
 
 // ====================================================================
-// 2. UI Toggling (Logic remains the same)
+// 2. UI Toggling (Unchanged)
 // ====================================================================
 
 function showInputForm() {
@@ -205,7 +202,7 @@ function showInputForm() {
 
 
 // ====================================================================
-// 3. WRITE OPERATION (Single Dynamic Entry) - (Logic remains the same)
+// 3. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
 // ====================================================================
 
 FORM.addEventListener('submit', async function(event) {
@@ -216,7 +213,6 @@ FORM.addEventListener('submit', async function(event) {
     const headerName = HEADER_INPUT.value.trim();
     const dataValue = DATA_INPUT.value;
     
-    // ... (Error checks for key, headerName, dataValue) ...
     if (!keyToSubmit || !headerName || !dataValue) {
         MESSAGE_ELEMENT.textContent = '❌ Error: All fields are required.';
         return;
@@ -241,7 +237,6 @@ FORM.addEventListener('submit', async function(event) {
         if (result.status === 'success') {
             MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
             FORM.reset(); 
-            // Do NOT refresh data view automatically since it's now search-based
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
         }
@@ -254,4 +249,4 @@ FORM.addEventListener('submit', async function(event) {
 
 
 // Start the process when the page loads (no initial fetch is needed now)
-// document.addEventListener('DOMContentLoaded', fetchData); // Removed
+// document.addEventListener('DOMContentLoaded', searchLoan);
