@@ -103,7 +103,7 @@ const DISPLAY_BLOCKS = [
         fields: {
             "Demand Notice Expense": "Demand Notice Expense",
             "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Expense": "Sec-138 Expense",
+            "Sec.138 Exprense": "Sec-138 Expense",
         }
     }
 ];
