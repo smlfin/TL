@@ -1,4 +1,4 @@
-/* GLOBAL STYLES */
+/* GLOBAL STYLES *//* GLOBAL STYLES */
 :root {
     --color-primary: #007bff; /* Blue */
     --color-secondary: #6c757d; /* Gray */
@@ -99,7 +99,7 @@ select:disabled {
 }
 
 /* ------------------------------------------------------------- */
-/* SEARCH SECTION HORIZONTAL LAYOUT (NEW)                        */
+/* SEARCH SECTION HORIZONTAL LAYOUT                              */
 /* ------------------------------------------------------------- */
 
 .search-controls {
@@ -136,7 +136,10 @@ select:disabled {
 }
 
 
-/* BLOCK DISPLAY STYLING - Default Vertical (RETAINED) */
+/* ------------------------------------------------------------- */
+/* DATA DISPLAY STYLING                                          */
+/* ------------------------------------------------------------- */
+
 #data-blocks {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -186,21 +189,22 @@ select:disabled {
 
 
 /* ------------------------------------------------------------- */
-/* CUSTOM DESIGN IMPLEMENTATION (RETAINED)                       */
+/* 1. CUSTOMER & LOAN DETAILS (BLOCK 1) - THE 4-COLUMN FIX       */
 /* ------------------------------------------------------------- */
 
-/* 1. Horizontal Grid Style for Customer & Loan Details (Block 1) */
 .data-block.horizontal-grid {
     grid-column: 1 / -1; 
 }
 
 .data-block.horizontal-grid .data-block-content {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    /* FIX HERE: Reduced minmax from 280px to 200px. This allows four columns to fit across the 900px max-width container (4 * 200px = 800px). */
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); 
     gap: 15px 30px; 
     padding-top: 10px;
 }
 
+/* Override vertical item styling for horizontal grid items */
 .data-block.horizontal-grid .data-block-item {
     padding: 0;
     border-bottom: none;
