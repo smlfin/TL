@@ -8,7 +8,7 @@
     --color-background: #f8f9fa; /* Light Gray Background */
     --color-surface: #ffffff; /* White card/section background */
     --color-stripe: #f2f2f2; /* Light gray for zebra striping */
-    --color-total: #e6f7ff; /* Very light blue for total row (NEW) */
+    --color-total: #e6f7ff; /* Very light blue for total row */
     --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -184,7 +184,8 @@ select:disabled {
 .data-block-item {
     display: flex;
     justify-content: space-between;
-    padding: 8px 0;
+    /* CHANGE HERE: Increased vertical padding for better spacing */
+    padding: 12px 0; 
     border-bottom: 1px dotted #ced4da;
 }
 
@@ -192,15 +193,15 @@ select:disabled {
 .data-block-item:nth-child(even) {
     background-color: var(--color-stripe);
     margin: 0 -15px; 
-    padding: 8px 15px;
+    /* CHANGE HERE: Increased vertical padding to match standard row */
+    padding: 12px 15px; 
 }
 
-/* TOTAL CHARGES STYLING (NEW) */
+/* TOTAL CHARGES STYLING */
 .data-block-item.total-charges {
-    /* Ensure it breaks the zebra pattern */
     background-color: var(--color-total) !important; 
     border-top: 2px solid var(--color-primary);
-    margin: 10px -15px 0 -15px; /* Margin to separate from items and span full width */
+    margin: 10px -15px 0 -15px; 
     padding: 10px 15px !important; 
     font-weight: bold;
 }
@@ -225,6 +226,9 @@ select:disabled {
     color: #212529;
     text-align: right;
     max-width: 60%; 
+    /* Allow text wrapping for long remarks */
+    word-wrap: break-word; 
+    white-space: normal; 
 }
 
 /* Critical Value Highlight */
@@ -251,7 +255,7 @@ select:disabled {
     padding-top: 10px;
 }
 
-/* Disable zebra striping and sticky styling for Block 1 (horizontal grid) */
+/* Disable vertical list styling for Block 1 (horizontal grid) */
 .data-block.horizontal-grid .data-block-item {
     padding: 0;
     border-bottom: none;
