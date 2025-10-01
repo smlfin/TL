@@ -3,53 +3,58 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Loan Data Portal</title>
+    <title>SML Finance Class Room</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Loan Data Search Portal</h1>
+    <div class="container">
+        <img src="v.png" alt="Vanchinad Finance Logo" class="logo">
+        <h1>SML Finance Class Room</h1>
 
-    <section id="data-search">
-        <h2>Loan Search</h2>
-        <label for="loan-no-input">Enter Loan No (e.g., C001):</label>
-        <input type="text" id="loan-no-input" value="" placeholder="Enter Loan No..." required>
-        <button id="search-button">Search Loan</button>
-        <p id="loading-status"></p>
-    </section>
+        <div id="intermediatePage">
+            <h2>Select a Module</h2>
+            <button id="learningModuleBtn">Learning Module</button>
+            <button id="testModuleBtn">Test on Investment Products</button>
+        </div>
 
-    <section id="data-view-blocks" style="display: none;">
-        <h2>Loan File Details: <span id="display-loan-no"></span></h2>
-        
-        <div id="data-blocks">
+        <div id="learningModuleContainer" style="display:none;">
+            <h2>Learning Module</h2>
+            <video controls>
+                <source src="demvid.mp4" type="video/mp4">
+                Your browser does not support the video tag.
+            </video>
+            <button id="backToHomeBtn">Back to Modules</button>
+        </div>
+
+        <form id="detailsForm" style="display:none;">
+            <p>Please enter your details to start the test.</p>
+            <div class="form-grid">
+                <input type="text" id="name" placeholder="Employee Name" required>
+                <input type="text" id="code" placeholder="Employee Code" required>
+                <input type="text" id="designation" placeholder="Designation" required>
+                <input type="text" id="branch" placeholder="Branch" required>
             </div>
-        
-        <p id="not-found-message" style="display: none; color: var(--color-danger); font-weight: bold;"></p>
-    </section>
-    
-    <hr>
-
-    <section id="data-input">
-        <h2>Record New Data (Department A Only)</h2>
-        <label for="auth-key">Secret Key (for writing):</label>
-        <input type="password" id="auth-key" value="">
-        <button onclick="showInputForm()">Enable Input</button>
-        
-        <form id="record-form" style="display: none;">
-            <div id="dynamic-field">
-                <h3>Enter Column Header and Data:</h3>
-                
-                <label for="header_name">Column Header Name:</label>
-                <input type="text" id="header_name" value="New Column Name" required><br><br>
-
-                <label for="data_value">Data Value:</label>
-                <input type="text" id="data_value" value="" required><br><br>
-            </div> 
-
-            <button type="submit">Submit New Record</button>
-            <p id="submission-message"></p>
+            <button type="submit">Start Test</button>
         </form>
-    </section>
 
+        <div id="testContainer" style="display:none;">
+            <span id="questionCounter"></span>
+            <form id="testForm"></form>
+            <div class="navigation-buttons">
+                <button type="button" id="prevBtn" style="display:none;">Previous</button>
+                <button type="button" id="nextBtn">Next</button>
+            </div>
+        </div>
+
+        <div id="resultsContainer" style="display:none;">
+            <h2>Test Results</h2>
+            <p id="scoreDisplay"></p>
+            <p id="gradeDisplay"></p>
+            <p id="certificateMessage"></p>
+            <button id="downloadCertificateBtn" style="display:none;">Download Certificate</button>
+            <button id="downloadResponseBtn" style="display:none;">Download Responses</button>
+        </div>
+    </div>
     <script src="script.js"></script>
 </body>
 </html>
