@@ -8,6 +8,7 @@
     --color-background: #f8f9fa; /* Light Gray Background */
     --color-surface: #ffffff; /* White card/section background */
     --color-stripe: #f2f2f2; /* Light gray for zebra striping */
+    --color-total: #e6f7ff; /* Very light blue for total row (NEW) */
     --font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
@@ -64,7 +65,7 @@ button:hover:not(:disabled) {
 }
 
 button:disabled {
-    background-color: #ced4da !important; /* Overriding specific button colors */
+    background-color: #ced4da !important; 
     cursor: not-allowed;
 }
 
@@ -72,7 +73,7 @@ button:disabled {
 button#search-button {
     background-color: var(--color-success);
     margin-top: 0; 
-    height: 44px; /* Matches input height */
+    height: 44px; 
 }
 button#search-button:hover:not(:disabled) {
     background-color: #218838;
@@ -101,7 +102,7 @@ select {
     appearance: none; 
     background-color: white;
     cursor: pointer;
-    height: 44px; /* Uniform height */
+    height: 44px; 
 }
 
 select:disabled {
@@ -111,7 +112,7 @@ select:disabled {
 }
 
 /* ------------------------------------------------------------- */
-/* SEARCH SECTION HORIZONTAL LAYOUT (Horizontal/Visual Separation) */
+/* SEARCH SECTION HORIZONTAL LAYOUT                              */
 /* ------------------------------------------------------------- */
 
 .search-controls {
@@ -132,18 +133,14 @@ select:disabled {
     min-width: 200px;
 }
 
-/* Since we removed individual labels in HTML, we style the selects directly */
-.search-group select {
-    /* Style only the select box */
-}
-
 #loading-status {
-    flex: 1 1 100%; /* Takes full width */
+    flex: 1 1 100%; 
     margin-top: 10px;
     padding: 5px 0 0 5px;
     font-style: italic;
     color: var(--color-primary);
 }
+
 
 /* ------------------------------------------------------------- */
 /* DATA DISPLAY STYLING (Sticky Headers & Zebra Striping)        */
@@ -162,14 +159,13 @@ select:disabled {
     padding: 15px;
     background-color: var(--color-surface);
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-    /* For sticky h3 */
     position: relative;
     overflow: hidden;
 }
 
 /* Sticky Header */
 .data-block h3 {
-    margin-top: -15px; /* Pull into padding space */
+    margin-top: -15px; 
     margin-left: -15px;
     margin-right: -15px;
     padding: 15px;
@@ -180,7 +176,7 @@ select:disabled {
     
     position: sticky;
     top: 0;
-    background-color: var(--color-surface); /* Ensures content scrolls beneath it */
+    background-color: var(--color-surface); 
     z-index: 10;
 }
 
@@ -195,9 +191,25 @@ select:disabled {
 /* Zebra Striping */
 .data-block-item:nth-child(even) {
     background-color: var(--color-stripe);
-    margin: 0 -15px; /* Extend striping across block padding */
+    margin: 0 -15px; 
     padding: 8px 15px;
 }
+
+/* TOTAL CHARGES STYLING (NEW) */
+.data-block-item.total-charges {
+    /* Ensure it breaks the zebra pattern */
+    background-color: var(--color-total) !important; 
+    border-top: 2px solid var(--color-primary);
+    margin: 10px -15px 0 -15px; /* Margin to separate from items and span full width */
+    padding: 10px 15px !important; 
+    font-weight: bold;
+}
+
+.data-block-item.total-charges .item-label {
+    font-size: 1.1em;
+    color: var(--color-primary);
+}
+
 
 .data-block-item:last-child {
     border-bottom: none;
@@ -217,9 +229,9 @@ select:disabled {
 
 /* Critical Value Highlight */
 .item-value.critical-value {
-    color: var(--color-danger); /* Red text */
+    color: var(--color-danger); 
     font-weight: 700;
-    background-color: #fff3cd; /* Soft yellow background for emphasis */
+    background-color: #fff3cd; 
     padding: 2px 5px;
     border-radius: 3px;
 }
@@ -268,10 +280,18 @@ select:disabled {
 }
 
 
-/* ------------------------------------------------------------- */
-/* 4. WRITE FORM LAYOUT (Refined) */
-/* ------------------------------------------------------------- */
+/* 2. Highlight Sub-headings for Legal Action Remarks (Block 2) */
+.data-block.legal-remarks .item-label {
+    font-weight: 700; 
+    color: #3a5c7f; 
+    background-color: #e9f2ff; 
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 10px;
+}
 
+
+/* 4. WRITE FORM LAYOUT (Refined) */
 #dynamic-field {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
