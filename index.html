@@ -12,23 +12,29 @@
     <section id="data-search">
         <h2>Loan Search</h2>
         
-        <label for="branch-select">Select Branch:</label>
-        <select id="branch-select" required>
-            <option value="">-- Loading Branches --</option>
-        </select>
-        
-        <br><br>
+        <div class="search-controls">
+            
+            <div class="search-group">
+                <label for="branch-select">Select Branch:</label>
+                <select id="branch-select" required>
+                    <option value="">-- Loading Branches --</option>
+                </select>
+            </div>
+            
+            <div class="search-group">
+                <label for="loan-select">Select Loan No:</label>
+                <select id="loan-select" required disabled>
+                    <option value="">-- Select Branch First --</option>
+                </select>
+            </div>
+            
+            <button id="search-button" disabled>Display Loan Data</button>
+        </div>
 
-        <label for="loan-select">Select Loan No:</label>
-        <select id="loan-select" required disabled>
-            <option value="">-- Select Branch First --</option>
-        </select>
-        
-        <br><br>
-
-        <button id="search-button" disabled>Display Loan Data</button>
         <p id="loading-status"></p>
     </section>
+    
+    <hr>
 
     <section id="data-view-blocks" style="display: none;">
         <h2>Loan File Details: <span id="display-loan-no"></span></h2>

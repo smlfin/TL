@@ -55,31 +55,88 @@ button {
     font-size: 16px;
     transition: background-color 0.2s, box-shadow 0.2s;
     margin-top: 10px;
+    white-space: nowrap; /* Prevent button text wrapping */
+}
+
+button:hover:not(:disabled) {
+    background-color: #0056b3;
+}
+
+button:disabled {
+    background-color: #ced4da;
+    cursor: not-allowed;
 }
 
 button#search-button {
     background-color: var(--color-success);
+    margin-top: 0; 
 }
 
-button#search-button:hover {
+button#search-button:hover:not(:disabled) {
     background-color: #218838;
 }
 
-/* INPUT STYLING */
+/* INPUT & SELECT STYLING */
 input[type="text"],
 input[type="password"],
-input[type="date"] {
+input[type="date"],
+select { 
     width: 100%;
-    max-width: 300px;
     padding: 10px;
-    margin-right: 15px;
     border: 1px solid #ced4da;
     border-radius: 4px;
     box-sizing: border-box; 
     transition: border-color 0.2s;
+    appearance: none; 
+    background-color: white;
+    cursor: pointer;
 }
 
-/* BLOCK DISPLAY STYLING - Default Vertical */
+select:disabled {
+    background-color: #e9ecef;
+    color: #6c757d;
+    cursor: not-allowed;
+}
+
+/* ------------------------------------------------------------- */
+/* SEARCH SECTION HORIZONTAL LAYOUT (NEW)                        */
+/* ------------------------------------------------------------- */
+
+.search-controls {
+    /* Main container for horizontal arrangement */
+    display: flex;
+    gap: 15px; 
+    /* Align elements to the bottom to line up the button and selects */
+    align-items: flex-end; 
+    flex-wrap: wrap; /* Allow wrapping on small screens */
+}
+
+.search-group {
+    /* Each select/label pair takes up proportional space */
+    flex: 1 1 200px; /* Grow, shrink, base size 200px */
+    min-width: 200px;
+}
+
+.search-group label {
+    display: block; /* Label goes above the select */
+    font-weight: 500;
+    color: #495057;
+    margin-bottom: 5px;
+}
+
+#search-button {
+    flex: 0 0 auto; /* Button size is fixed */
+    padding: 10px 20px;
+    height: 44px; /* Ensure height matches the selects/inputs */
+}
+
+#loading-status {
+    width: 100%; /* Ensure status message takes full width below controls */
+    margin-top: 10px;
+}
+
+
+/* BLOCK DISPLAY STYLING - Default Vertical (RETAINED) */
 #data-blocks {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -124,33 +181,30 @@ input[type="date"] {
     font-weight: 600;
     color: #212529;
     text-align: right;
-    max-width: 60%; /* Allow long labels to dominate */
+    max-width: 60%; 
 }
 
 
 /* ------------------------------------------------------------- */
-/* CUSTOM DESIGN IMPLEMENTATION                                  */
+/* CUSTOM DESIGN IMPLEMENTATION (RETAINED)                       */
 /* ------------------------------------------------------------- */
 
 /* 1. Horizontal Grid Style for Customer & Loan Details (Block 1) */
 .data-block.horizontal-grid {
-    /* Override block width to make it span wider */
     grid-column: 1 / -1; 
 }
 
 .data-block.horizontal-grid .data-block-content {
     display: grid;
-    /* CHANGE HERE: Responsive 4-column layout is now encouraged by minmax(200px, 1fr) */
-    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); 
-    gap: 15px 30px; /* Vertical and horizontal gap */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    gap: 15px 30px; 
     padding-top: 10px;
 }
 
-/* Override vertical item styling for horizontal grid items */
 .data-block.horizontal-grid .data-block-item {
     padding: 0;
     border-bottom: none;
-    display: block; /* Stack label and value */
+    display: block; 
 }
 
 .data-block.horizontal-grid .item-label {
@@ -165,16 +219,16 @@ input[type="date"] {
     font-size: 1em;
     font-weight: 700;
     color: #212529;
-    text-align: left; /* Align value to the left in this block */
+    text-align: left; 
     max-width: none;
 }
 
 
 /* 2. Highlight Sub-headings for Legal Action Remarks (Block 2) */
 .data-block.legal-remarks .item-label {
-    font-weight: 700; /* Extra bold */
-    color: #3a5c7f; /* Darker, slightly blue color */
-    background-color: #e9f2ff; /* Very light blue background highlight */
+    font-weight: 700; 
+    color: #3a5c7f; 
+    background-color: #e9f2ff; 
     padding: 2px 5px;
     border-radius: 3px;
     margin-right: 10px;
