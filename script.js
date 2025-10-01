@@ -59,13 +59,42 @@ const DATE_FIELDS = [
     "AttachmentEffDate"
 ];
 
-// CRITICAL FIELDS for Highlighting (NEW)
+// CRITICAL FIELDS for Highlighting
 const CRITICAL_FIELDS = [
     "Arrear Amount", 
     "Loan Balance",
-    "CASE NO", // From section 3
-    "CASENOSec9" // From section 4
+    "CASE NO", 
+    "CASENOSec9" 
 ];
+
+// CHARGE FIELDS for Summation (NEW)
+const CHARGE_FIELDS = [
+    "Demand Notice Expense",
+    "Sec 09 Expense",
+    "Sec.138 Expense"
+];
+
+
+// Helper function to safely parse and sum charge fields (NEW)
+function calculateTotalCharges(record) {
+    let total = 0;
+    
+    const parseNumber = (value) => {
+        if (typeof value === 'string') {
+            // Remove commas and currency symbols
+            value = value.replace(/[$,]/g, '').trim();
+        }
+        const number = parseFloat(value);
+        return isNaN(number) ? 0 : number;
+    };
+
+    CHARGE_FIELDS.forEach(field => {
+        const value = record[field];
+        total += parseNumber(value);
+    });
+
+    return total;
+}
 
 
 // API URL now points to the Netlify Function proxy
@@ -77,7 +106,7 @@ const CLIENT_SIDE_AUTH_KEY = "123";
 let ALL_RECORDS = []; 
 
 
-// --- DISPLAY CONFIGURATION (Use the cleanest headers you settled on) ---
+// --- DISPLAY CONFIGURATION (Used for rendering structure) ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -114,26 +143,26 @@ const DISPLAY_BLOCKS = [
             "CHEQ. NO.": "Cheque Number",
             "CQ DATE/PRESENTATION DATE": "Cheque presentation Date",
             "CQ RETURN DATE": "Cheque return Date",
-            "AMOUNT": "AMOUNT",
+            "AMOUNT": "Amount",
             "B/G": "Borrower / Guarantor",
-            "BANK": "BANK",
-            "REMARKS": "REMARKS",
-            "ADVOCATE": "ADVOCATE", 
-            "HANDED OVER DATE": "HANDED OVER DATE",
+            "BANK": "Bank",
+            "REMARKS": "Remarks",
+            "ADVOCATE": "Advocate", 
+            "HANDED OVER DATE": "Handed Over Date",
             "Notice Remarks": "Notice Remarks",
-            "CASE FILED": "CASE FILED",
-            "CASE NO": "CASE NO", 
+            "CASE FILED": "Case Filed",
+            "CASE NO": "Case No", 
         }
     },
     {
-       title: "4) Section 9",
+        title: "4) Section 9",
         fields: {
             // Placeholder: Use whatever clean headers you settled on in the sheet.
             // If you did not rename them, revert to the original names here:
             "Sec/9 Filing Date": "Sec-09 Filing Date",
             "Sec/9 Filing Amt": "Sec-09 Filing Amount",
             "Sec/9 Advocate": "Advocate", 
-            "Sec/9 Case No": "CASE NO",   
+            "Sec/9 Case No": "Case No",   
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -209,7 +238,6 @@ function populateBranchDropdown(records) {
 
     BRANCH_SELECT.innerHTML = '<option value="" selected disabled>-- Select Branch --</option>';
     
-    // Sort and add options
     [...branches].sort().forEach(branch => {
         const option = document.createElement('option');
         option.value = branch;
@@ -224,7 +252,6 @@ function populateBranchDropdown(records) {
 // 2. CASCADING LOGIC
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
-    // Enable search button only when a valid loan is selected
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
     LOADING_STATUS.textContent = 'Click "Display Loan Data"';
 });
@@ -232,7 +259,6 @@ LOAN_SELECT.addEventListener('change', () => {
 function populateLoanDropdown() {
     const selectedBranch = BRANCH_SELECT.value;
     
-    // Reset Loan Select
     LOAN_SELECT.innerHTML = '<option value="" selected disabled>-- Select Loan No --</option>';
     LOAN_SELECT.disabled = true;
     SEARCH_BUTTON.disabled = true;
@@ -245,7 +271,6 @@ function populateLoanDropdown() {
         .filter(record => String(record["Loan Branch"]).trim() === selectedBranch)
         .map(record => String(record["Loan No"]).trim());
 
-    // Use Set to ensure unique loan numbers (though ideally they should be unique)
     const uniqueLoans = new Set(loans);
     
     [...uniqueLoans].sort().forEach(loanNo => {
@@ -274,7 +299,6 @@ function displayLoan() {
 
     LOADING_STATUS.textContent = `Displaying data for Loan No: ${loanNo}...`;
 
-    // Find the record in the locally stored ALL_RECORDS
     const record = ALL_RECORDS.find(r => 
         String(r["Loan Branch"]).trim() === selectedBranch && 
         String(r["Loan No"]).trim() === loanNo
@@ -303,7 +327,6 @@ function renderBlocks(record) {
         const block = document.createElement('div');
         block.className = 'data-block';
 
-        // Apply design classes (Horizontal Grid, Legal Remarks highlight)
         if (index === 0) {
             block.classList.add('horizontal-grid');
         } else if (index === 1) {
@@ -336,7 +359,7 @@ function renderBlocks(record) {
             dataValue.className = 'item-value';
             dataValue.textContent = value;
             
-            // Apply CRITICAL HIGHLIGHT (NEW)
+            // Apply CRITICAL HIGHLIGHT
             if (CRITICAL_FIELDS.includes(sheetHeader)) {
                 dataValue.classList.add('critical-value');
             }
@@ -345,6 +368,28 @@ function renderBlocks(record) {
             item.appendChild(dataValue);
             contentWrapper.appendChild(item);
         });
+
+        // --- NEW LOGIC: Calculate and append Total Charges for Block 5 ---
+        if (index === 4) { // Block 5: Charges
+            const total = calculateTotalCharges(record);
+            const totalItem = document.createElement('div');
+            totalItem.className = 'data-block-item total-charges'; 
+
+            const label = document.createElement('span');
+            label.className = 'item-label';
+            label.textContent = `TOTAL CHARGES:`;
+
+            const dataValue = document.createElement('span');
+            dataValue.className = 'item-value critical-value'; 
+            
+            // Format to currency with two decimal places
+            dataValue.textContent = total.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+            totalItem.appendChild(label);
+            totalItem.appendChild(dataValue);
+            contentWrapper.appendChild(totalItem);
+        }
+        // -----------------------------------------------------------------
 
         block.appendChild(contentWrapper);
         DATA_BLOCKS_CONTAINER.appendChild(block);
@@ -357,7 +402,7 @@ function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
     if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'grid'; // Use grid for the new form layout
+        FORM.style.display = 'grid'; 
         AUTH_KEY_INPUT.style.display = 'none';
         document.getElementById('enable-input-button').style.display = 'none';
         AUTH_LABEL.textContent = 'Write Access Granted.';
@@ -402,7 +447,6 @@ FORM.addEventListener('submit', async function(event) {
         if (result.status === 'success') {
             MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}. Reloading data...`;
             FORM.reset(); 
-            // Reload the data cache after successful write
             initialLoad(); 
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
