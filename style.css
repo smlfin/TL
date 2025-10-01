@@ -46,7 +46,7 @@ h2 {
 
 /* BUTTON STYLING */
 button {
-    background-color: var(--color-primary); /* Changed to primary color for search/submit */
+    background-color: var(--color-primary); 
     color: white;
     border: none;
     padding: 10px 20px;
@@ -70,7 +70,7 @@ input[type="text"],
 input[type="password"],
 input[type="date"] {
     width: 100%;
-    max-width: 300px; /* Constrain search bar width */
+    max-width: 300px;
     padding: 10px;
     margin-right: 15px;
     border: 1px solid #ced4da;
@@ -79,10 +79,10 @@ input[type="date"] {
     transition: border-color 0.2s;
 }
 
-/* BLOCK DISPLAY STYLING */
+/* BLOCK DISPLAY STYLING - Default Vertical */
 #data-blocks {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); /* Responsive columns */
+    grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
     gap: 20px;
     margin-top: 20px;
 }
@@ -103,6 +103,7 @@ input[type="date"] {
     font-size: 1.1em;
 }
 
+/* Vertical Item Styling (used by blocks 2, 3, 4, 5) */
 .data-block-item {
     display: flex;
     justify-content: space-between;
@@ -122,4 +123,59 @@ input[type="date"] {
 .item-value {
     font-weight: 600;
     color: #212529;
+    text-align: right;
+    max-width: 60%; /* Allow long labels to dominate */
+}
+
+
+/* ------------------------------------------------------------- */
+/* CUSTOM DESIGN IMPLEMENTATION                                  */
+/* ------------------------------------------------------------- */
+
+/* 1. Horizontal Grid Style for Customer & Loan Details (Block 1) */
+.data-block.horizontal-grid {
+    /* Override block width to make it span wider */
+    grid-column: 1 / -1; 
+}
+
+.data-block.horizontal-grid .data-block-content {
+    display: grid;
+    /* 3-column layout on wide screens, responsive down to 280px cells */
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    gap: 15px 30px; /* Vertical and horizontal gap */
+    padding-top: 10px;
+}
+
+/* Override vertical item styling for horizontal grid items */
+.data-block.horizontal-grid .data-block-item {
+    padding: 0;
+    border-bottom: none;
+    display: block; /* Stack label and value */
+}
+
+.data-block.horizontal-grid .item-label {
+    display: block;
+    font-size: 0.8em; 
+    color: var(--color-secondary); 
+    margin-bottom: 2px;
+}
+
+.data-block.horizontal-grid .item-value {
+    display: block;
+    font-size: 1em;
+    font-weight: 700;
+    color: #212529;
+    text-align: left; /* Align value to the left in this block */
+    max-width: none;
+}
+
+
+/* 2. Highlight Sub-headings for Legal Action Remarks (Block 2) */
+.data-block.legal-remarks .item-label {
+    font-weight: 700; /* Extra bold */
+    color: #3a5c7f; /* Darker, slightly blue color */
+    background-color: #e9f2ff; /* Very light blue background highlight */
+    padding: 2px 5px;
+    border-radius: 3px;
+    margin-right: 10px;
 }

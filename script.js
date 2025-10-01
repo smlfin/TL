@@ -9,13 +9,7 @@ const API_URL = "/.netlify/functions/fetch-data";
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
 // ====================================================================
-// FIELD MAPPING CONFIGURATION (FIXED Section 9 HEADERS)
-<<<<<<< HEAD
-// Note: Header keys must EXACTLY match the Google Sheet Row 1.
-// The Section 9 headers are assumed to be renamed in the sheet to handle duplicates.
-=======
-// Note: Header keys MUST MATCH the Google Sheet Row 1 exactly.
->>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
+// FIELD MAPPING CONFIGURATION (No change here)
 // ====================================================================
 const DISPLAY_BLOCKS = [
     {
@@ -57,37 +51,20 @@ const DISPLAY_BLOCKS = [
             "B/G": "Borrower / Guarantor",
             "BANK": "BANK",
             "REMARKS": "REMARKS",
-<<<<<<< HEAD
-            "ADVOCATE": "ADVOCATE", // This references the first "ADVOCATE" column
-            "HANDED OVER DATE": "HANDED OVER DATE",
-            "Notice Remarks": "Notice Remarks",
-            "CASE FILED": "CASE FILED",
-            "CASE NO": "CASE NO", // This references the first "CASE NO" column
-=======
             "ADVOCATE": "ADVOCATE", 
             "HANDED OVER DATE": "HANDED OVER DATE",
             "Notice Remarks": "Notice Remarks",
             "CASE FILED": "CASE FILED",
             "CASE NO": "CASE NO", 
->>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
         }
     },
     {
         title: "4) Section 9",
         fields: {
-<<<<<<< HEAD
             "Sec 09 Filing Date": "Sec-09 Filing Date",
             "Sec 09 Filing Amt": "Sec-09 Filing Amount",
-            // *** UPDATED KEYS - MUST MATCH NEW SHEET HEADERS ***
-            "Advocate9": "Advocate", // Renamed in Sheet
-            "CASE NO9": "CASE NO", // Renamed in Sheet
-=======
-            "Sec 09 Filing Date": "Sec 09 Filing Date",
-            "Sec 09 Filing Amt": "Sec 09 Filing Amt",
-            // *** MAPPING NEW UNIQUE HEADERS ***
-            "Advocate (Sec 09)": "Advocate", 
-            "CASE NO (Sec 09)": "CASE NO", 
->>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
+            "Advocate9": "Advocate", 
+            "CASE NO9": "CASE NO", 
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -96,7 +73,7 @@ const DISPLAY_BLOCKS = [
         fields: {
             "Demand Notice Expense": "Demand Notice Expense",
             "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Exprense": "Sec-138 Expense",
+            "Sec.138 Expense": "Sec-138 Expense",
         }
     }
 ];
@@ -169,16 +146,29 @@ function renderBlocks(record) {
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     DATA_VIEW_SECTION.style.display = 'block';
 
-    DISPLAY_BLOCKS.forEach(blockConfig => {
+    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
+
+        // --- DESIGN CHANGE IMPLEMENTATION ---
+        if (index === 0) {
+            // Requirement 1: Customer & Loan Details (Block 1) should be horizontal grid
+            block.classList.add('horizontal-grid');
+        } else if (index === 1) {
+            // Requirement 2: Legal Action Recommendation & Remarks (Block 2) needs label highlighting
+            block.classList.add('legal-remarks');
+        }
+        // ------------------------------------
         
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
         block.appendChild(title);
-
+        
+        // Create a wrapper for the content to apply grid/flex rules to
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'data-block-content';
+        
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-            // Note: sheetHeader is the exact key from the Apps Script JSON payload
             const value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             const item = document.createElement('div');
@@ -194,9 +184,10 @@ function renderBlocks(record) {
             
             item.appendChild(label);
             item.appendChild(dataValue);
-            block.appendChild(item);
+            contentWrapper.appendChild(item);
         });
 
+        block.appendChild(contentWrapper);
         DATA_BLOCKS_CONTAINER.appendChild(block);
     });
 }
@@ -266,11 +257,3 @@ FORM.addEventListener('submit', async function(event) {
         console.error("Submission error:", error);
     }
 });
-
-
-// Start the process when the page loads (no initial fetch is needed now)
-<<<<<<< HEAD
-// document.addEventListener('DOMContentLoaded', searchLoan);
-=======
-// document.addEventListener('DOMContentLoaded', searchLoan);
->>>>>>> 4720270737b97b20923468491799cf9eeaa1afb9
