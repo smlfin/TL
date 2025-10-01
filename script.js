@@ -123,10 +123,10 @@ const DISPLAY_BLOCKS = [
         title: "4) Section 9",
         fields: {
             // VERIFIED HEADERS (KEYS MUST MATCH GOOGLE SHEET EXACTLY)
-            "Sec 09 Filing Date": "Sec-09 Filing Date",
-            "Sec 09 Filing Amt": "Sec-09 Filing Amount",
-            "Advocate9": "Advocate", 
-            "CASE NO9": "CASE NO",   
+            "Sec/9 Filing Date": "Sec-09 Filing Date",
+            "Sec/9 Filing Amt": "Sec-09 Filing Amount",
+            "Sec/9 Advocate": "Advocate", 
+            "Sec/9 Case No": "CASE NO",   
             "Attachment eff Date": "Attachment eff Date",
         }
     },
