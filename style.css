@@ -47,7 +47,7 @@ h2 {
     margin-bottom: 20px;
 }
 
-/* BUTTON STYLING */
+/* BUTTON STYLING - UNCHANGED */
 button {
     color: white;
     border: none;
@@ -69,7 +69,6 @@ button:disabled {
     cursor: not-allowed;
 }
 
-/* Primary Search Button */
 button#search-button {
     background-color: var(--color-success);
     margin-top: 0; 
@@ -79,7 +78,6 @@ button#search-button:hover:not(:disabled) {
     background-color: #218838;
 }
 
-/* Secondary Action Button (Enable Input) */
 button#enable-input-button {
     background-color: var(--color-secondary);
 }
@@ -87,8 +85,7 @@ button#enable-input-button:hover {
     background-color: #5a6268;
 }
 
-
-/* INPUT & SELECT STYLING */
+/* INPUT & SELECT STYLING - UNCHANGED */
 input[type="text"],
 input[type="password"],
 input[type="date"],
@@ -111,17 +108,12 @@ select:disabled {
     cursor: not-allowed;
 }
 
-/* ------------------------------------------------------------- */
-/* SEARCH SECTION HORIZONTAL LAYOUT                              */
-/* ------------------------------------------------------------- */
-
+/* SEARCH SECTION HORIZONTAL LAYOUT - UNCHANGED */
 .search-controls {
     display: flex;
     gap: 15px; 
     align-items: flex-end; 
     flex-wrap: wrap; 
-    
-    /* Visual Separation */
     border: 1px solid #e9ecef;
     padding: 15px;
     border-radius: 6px;
@@ -143,9 +135,62 @@ select:disabled {
 
 
 /* ------------------------------------------------------------- */
-/* DATA DISPLAY STYLING (Sticky Headers & Zebra Striping)        */
+/* SNAPSHOT BOX STYLING (NEW)                                    */
 /* ------------------------------------------------------------- */
 
+#loan-snapshot-box {
+    display: grid;
+    /* 4 equally sized columns */
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 15px;
+    margin-bottom: 30px; /* Space before the data blocks */
+    padding: 15px;
+    background-color: var(--color-primary); /* Strong background */
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.snapshot-item {
+    text-align: center;
+    padding: 10px;
+    background-color: var(--color-surface); 
+    border-radius: 4px;
+    /* Adding a subtle border for depth */
+    border: 1px solid #e9ecef; 
+}
+
+.snapshot-item .label {
+    display: block;
+    font-size: 0.8em;
+    color: var(--color-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.snapshot-item .value {
+    display: block;
+    font-size: 1.3em;
+    font-weight: 700;
+}
+
+/* Color coding for quick distinction */
+.snapshot-item.danger .value {
+    color: var(--color-danger); 
+}
+.snapshot-item.primary .value {
+    color: var(--color-primary); 
+}
+.snapshot-item.success .value {
+    color: var(--color-success); 
+}
+.snapshot-item.total-color .value {
+    /* Use the primary color again for total, or a deep grey */
+    color: #343a40; 
+    font-size: 1.4em;
+}
+
+
+/* DATA DISPLAY STYLING - UNCHANGED EXCEPT FOR ITEM-VALUE */
 #data-blocks {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
@@ -163,7 +208,7 @@ select:disabled {
     overflow: hidden;
 }
 
-/* Sticky Header */
+/* Sticky Header - UNCHANGED */
 .data-block h3 {
     margin-top: -15px; 
     margin-left: -15px;
@@ -173,31 +218,28 @@ select:disabled {
     border-bottom: 1px solid #dee2e6;
     color: var(--color-primary);
     font-size: 1.1em;
-    
     position: sticky;
     top: 0;
     background-color: var(--color-surface); 
     z-index: 10;
 }
 
-/* Vertical Item Styling (used by blocks 2, 3, 4, 5) */
+/* Vertical Item Styling - UNCHANGED */
 .data-block-item {
     display: flex;
     justify-content: space-between;
-    /* CHANGE HERE: Increased vertical padding for better spacing */
     padding: 12px 0; 
     border-bottom: 1px dotted #ced4da;
 }
 
-/* Zebra Striping */
+/* Zebra Striping - UNCHANGED */
 .data-block-item:nth-child(even) {
     background-color: var(--color-stripe);
     margin: 0 -15px; 
-    /* CHANGE HERE: Increased vertical padding to match standard row */
     padding: 12px 15px; 
 }
 
-/* TOTAL CHARGES STYLING */
+/* TOTAL CHARGES STYLING - UNCHANGED */
 .data-block-item.total-charges {
     background-color: var(--color-total) !important; 
     border-top: 2px solid var(--color-primary);
@@ -211,11 +253,6 @@ select:disabled {
     color: var(--color-primary);
 }
 
-
-.data-block-item:last-child {
-    border-bottom: none;
-}
-
 .item-label {
     font-weight: 500;
     color: #495057;
@@ -226,12 +263,11 @@ select:disabled {
     color: #212529;
     text-align: right;
     max-width: 60%; 
-    /* Allow text wrapping for long remarks */
     word-wrap: break-word; 
     white-space: normal; 
 }
 
-/* Critical Value Highlight */
+/* Critical Value Highlight - UNCHANGED */
 .item-value.critical-value {
     color: var(--color-danger); 
     font-weight: 700;
@@ -240,10 +276,7 @@ select:disabled {
     border-radius: 3px;
 }
 
-/* ------------------------------------------------------------- */
-/* 1. CUSTOMER & LOAN DETAILS (BLOCK 1) - Horizontal Grid */
-/* ------------------------------------------------------------- */
-
+/* CUSTOMER & LOAN DETAILS (BLOCK 1) - UNCHANGED */
 .data-block.horizontal-grid {
     grid-column: 1 / -1; 
 }
@@ -254,8 +287,6 @@ select:disabled {
     gap: 15px 30px; 
     padding-top: 10px;
 }
-
-/* Disable vertical list styling for Block 1 (horizontal grid) */
 .data-block.horizontal-grid .data-block-item {
     padding: 0;
     border-bottom: none;
@@ -266,14 +297,12 @@ select:disabled {
     margin: 0;
     padding: 0;
 }
-
 .data-block.horizontal-grid .item-label {
     display: block;
     font-size: 0.8em; 
     color: var(--color-secondary); 
     margin-bottom: 2px;
 }
-
 .data-block.horizontal-grid .item-value {
     display: block;
     font-size: 1em;
@@ -284,7 +313,7 @@ select:disabled {
 }
 
 
-/* 2. Highlight Sub-headings for Legal Action Remarks (Block 2) */
+/* Legal Action Remarks (Block 2) - UNCHANGED */
 .data-block.legal-remarks .item-label {
     font-weight: 700; 
     color: #3a5c7f; 
@@ -295,7 +324,7 @@ select:disabled {
 }
 
 
-/* 4. WRITE FORM LAYOUT (Refined) */
+/* WRITE FORM LAYOUT - UNCHANGED */
 #dynamic-field {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
