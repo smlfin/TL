@@ -55,8 +55,16 @@ const DATE_FIELDS = [
     "CQ DATE/PRESENTATION DATE", 
     "CQ RETURN DATE", 
     "HANDED OVER DATE", 
-    "Sec9FilingDate",       // Assuming you stuck with the clean names
-    "AttachmentEffDate"     // Assuming you stuck with the clean names
+    "Sec9FilingDate",
+    "AttachmentEffDate"
+];
+
+// CRITICAL FIELDS for Highlighting (NEW)
+const CRITICAL_FIELDS = [
+    "Arrear Amount", 
+    "Loan Balance",
+    "CASE NO", // From section 3
+    "CASENOSec9" // From section 4
 ];
 
 
@@ -118,7 +126,7 @@ const DISPLAY_BLOCKS = [
         }
     },
     {
-        title: "4) Section 9",
+       title: "4) Section 9",
         fields: {
             // Placeholder: Use whatever clean headers you settled on in the sheet.
             // If you did not rename them, revert to the original names here:
@@ -168,7 +176,6 @@ document.addEventListener('DOMContentLoaded', initialLoad);
 async function initialLoad() {
     LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns...';
     try {
-        // Fetch all data (the new Apps Script will be simpler and return all data)
         const response = await fetch(API_URL, {
             method: 'GET',
             mode: 'cors' 
@@ -179,7 +186,7 @@ async function initialLoad() {
         if (result.status === 'success' && result.data && result.data.length > 0) {
             ALL_RECORDS = result.data;
             populateBranchDropdown(ALL_RECORDS);
-            LOADING_STATUS.textContent = 'Ready. Please select a Branch.';
+            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No.';
         } else {
             LOADING_STATUS.textContent = '❌ Error: Could not load data from the server.';
             BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
@@ -219,6 +226,7 @@ BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     // Enable search button only when a valid loan is selected
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
+    LOADING_STATUS.textContent = 'Click "Display Loan Data"';
 });
 
 function populateLoanDropdown() {
@@ -248,7 +256,7 @@ function populateLoanDropdown() {
     });
 
     LOAN_SELECT.disabled = false;
-    LOADING_STATUS.textContent = `Select a Loan No from Branch: ${selectedBranch}`;
+    LOADING_STATUS.textContent = `Loan Nos loaded. Select one.`;
 }
 
 
@@ -290,14 +298,12 @@ function displayLoan() {
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    // ... (rest of renderBlocks function remains the same)
     
-    // ...
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
 
-        // Apply design changes
+        // Apply design classes (Horizontal Grid, Legal Remarks highlight)
         if (index === 0) {
             block.classList.add('horizontal-grid');
         } else if (index === 1) {
@@ -314,7 +320,7 @@ function renderBlocks(record) {
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
-            // Apply date formatting if the sheetHeader is in the DATE_FIELDS array
+            // Apply date formatting
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
             }
@@ -329,6 +335,11 @@ function renderBlocks(record) {
             const dataValue = document.createElement('span');
             dataValue.className = 'item-value';
             dataValue.textContent = value;
+            
+            // Apply CRITICAL HIGHLIGHT (NEW)
+            if (CRITICAL_FIELDS.includes(sheetHeader)) {
+                dataValue.classList.add('critical-value');
+            }
             
             item.appendChild(label);
             item.appendChild(dataValue);
@@ -346,9 +357,9 @@ function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
     if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'block';
+        FORM.style.display = 'grid'; // Use grid for the new form layout
         AUTH_KEY_INPUT.style.display = 'none';
-        AUTH_BUTTON.style.display = 'none';
+        document.getElementById('enable-input-button').style.display = 'none';
         AUTH_LABEL.textContent = 'Write Access Granted.';
         alert('Write access enabled! Please fill out the form.');
     } else {
@@ -389,9 +400,9 @@ FORM.addEventListener('submit', async function(event) {
         const result = await response.json();
 
         if (result.status === 'success') {
-            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
+            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}. Reloading data...`;
             FORM.reset(); 
-            // NOTE: For data consistency, you should reload the ALL_RECORDS cache here.
+            // Reload the data cache after successful write
             initialLoad(); 
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
