@@ -2,7 +2,7 @@
 const fetch = require('node-fetch');
 
 // CRITICAL: Replace this with your original working Apps Script /exec URL
-const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbwMHJLQ7_QRAdzFZ6LJp8wuX-GzBqCPdTvOpiJptfefhHYtXb81LZY3N2IF-NzwQKwUNA/exec"; 
+const GOOGLE_API_URL = "https://script.google.com/macros/s/AKfycbyHEWn2qRcX3UmcnORjc9UmvaL4gz2lZmCFLKjn7c1mpDwuyXs3eoRuT6pGZ5jC7vPO/exec"; 
 
 exports.handler = async function(event, context) {
     // This function acts as a proxy, fetching data from Google's server
