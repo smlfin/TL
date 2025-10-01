@@ -1,6 +1,4 @@
-// ====================================================================
-// CONFIGURATION: REPLACE THESE PLACEHOLDERS
-// ====================================================================
+
 
 // API URL now points to the Netlify Function proxy
 const API_URL = "/.netlify/functions/fetch-data"; 
@@ -8,9 +6,6 @@ const API_URL = "/.netlify/functions/fetch-data";
 // The secret key is now ONLY for the client-side check to enable the form.
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
-// ====================================================================
-// FIELD MAPPING CONFIGURATION (No change here)
-// ====================================================================
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -78,9 +73,9 @@ const DISPLAY_BLOCKS = [
     }
 ];
 
-// ====================================================================
+
 // DOM ELEMENTS (Unchanged)
-// ====================================================================
+
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -99,9 +94,9 @@ const HEADER_INPUT = document.getElementById('header_name');
 const DATA_INPUT = document.getElementById('data_value');
 
 
-// ====================================================================
+
 // 1. READ OPERATION (Search Loan by Number)
-// ====================================================================
+
 
 SEARCH_BUTTON.addEventListener('click', searchLoan);
 
@@ -158,7 +153,7 @@ function renderBlocks(record) {
             // Requirement 2: Legal Action Recommendation & Remarks (Block 2) needs label highlighting
             block.classList.add('legal-remarks');
         }
-        // ------------------------------------
+       
         
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
@@ -192,9 +187,9 @@ function renderBlocks(record) {
     });
 }
 
-// ====================================================================
+
 // 2. UI Toggling (Unchanged)
-// ====================================================================
+
 
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
@@ -212,9 +207,8 @@ function showInputForm() {
 }
 
 
-// ====================================================================
+
 // 3. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
-// ====================================================================
 
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
