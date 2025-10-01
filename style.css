@@ -140,8 +140,8 @@ input[type="date"] {
 
 .data-block.horizontal-grid .data-block-content {
     display: grid;
-    /* 3-column layout on wide screens, responsive down to 280px cells */
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    /* CHANGE HERE: Responsive 4-column layout is now encouraged by minmax(200px, 1fr) */
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); 
     gap: 15px 30px; /* Vertical and horizontal gap */
     padding-top: 10px;
 }
