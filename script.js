@@ -27,18 +27,17 @@ function formatDate(dateValue) {
                     // Use UTC to prevent timezone shifts
                     date = new Date(Date.UTC(year, month - 1, day)); 
                     
-                    // If parsing was successful, check again
                     if (isNaN(date.getTime())) {
-                        return dateValue; // Still can't parse
+                        return dateValue; 
                     }
                 } else {
-                    return dateValue; // Invalid day/month/year components
+                    return dateValue; 
                 }
             } else {
-                return dateValue; // Not a date format we can handle
+                return dateValue; 
             }
         } catch (e) {
-            return dateValue; // Failed manual parsing
+            return dateValue; 
         }
     }
 
@@ -62,7 +61,7 @@ const DATE_FIELDS = [
     "CQ DATE/PRESENTATION DATE", 
     "CQ RETURN DATE", 
     "HANDED OVER DATE", 
-    "Sec 09 Filing Date", 
+    "Sec 09 Filing Date", // Included in date formatting
     "Attachment eff Date"
 ];
 
@@ -123,10 +122,11 @@ const DISPLAY_BLOCKS = [
     {
         title: "4) Section 9",
         fields: {
+            // VERIFIED HEADERS (KEYS MUST MATCH GOOGLE SHEET EXACTLY)
             "Sec 09 Filing Date": "Sec-09 Filing Date",
             "Sec 09 Filing Amt": "Sec-09 Filing Amount",
-            "Advocate9": "Advocate", // Must match Google Sheet column header exactly!
-            "CASE NO9": "CASE NO",   // Must match Google Sheet column header exactly!
+            "Advocate9": "Advocate", 
+            "CASE NO9": "CASE NO",   
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -208,7 +208,6 @@ function renderBlocks(record) {
         const block = document.createElement('div');
         block.className = 'data-block';
 
-        // --- DESIGN CHANGE IMPLEMENTATION ---
         if (index === 0) {
             block.classList.add('horizontal-grid');
         } else if (index === 1) {
@@ -219,14 +218,13 @@ function renderBlocks(record) {
         title.textContent = blockConfig.title;
         block.appendChild(title);
         
-        // Create a wrapper for the content to apply grid/flex rules to
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'data-block-content';
         
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
-            // Apply date formatting if the sheetHeader is in the DATE_FIELDS array
+            // Apply date formatting if required
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
             }
