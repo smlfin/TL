@@ -1,32 +1,64 @@
-// Helper function to format ISO date string to dd/mm/yyyy
-function formatDate(isoDateString) {
-    if (!isoDateString || isoDateString === 'N/A' || String(isoDateString).startsWith('18')) {
-        return isoDateString;
+// Helper function to format date strings from Google Sheets to dd/mm/yyyy
+function formatDate(dateValue) {
+    if (!dateValue || dateValue === 'N/A' || String(dateValue).startsWith('18')) {
+        return dateValue;
     }
+    
+    let date;
 
-    try {
-        const date = new Date(isoDateString);
-        
-        // Check for 'Invalid Date' (e.g., if the sheet value is a text string)
-        if (isNaN(date.getTime())) {
-            return isoDateString;
+    // 1. Try to parse as a standard JavaScript date (handles ISO format/serial numbers)
+    date = new Date(dateValue);
+    
+    // 2. If standard parsing fails (i.e., it's a raw string like '28.08.2025' or '28/08/2025')
+    if (isNaN(date.getTime())) {
+        try {
+            // Normalize separators to handle both '.' and '/' for manual parsing
+            const parts = String(dateValue).trim().split(/[\.\/]/); 
+            
+            // Check for dd/mm/yyyy format (3 parts)
+            if (parts.length === 3) {
+                // Manually create date (Note: JS date constructor expects YYYY, MM, DD where MM is 0-indexed)
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+                
+                // Basic validation and handling of common sheet issues (e.g., year only 2 digits)
+                if (day > 0 && month > 0 && year > 1900) {
+                    // Use UTC to prevent timezone shifts
+                    date = new Date(Date.UTC(year, month - 1, day)); 
+                    
+                    // If parsing was successful, check again
+                    if (isNaN(date.getTime())) {
+                        return dateValue; // Still can't parse
+                    }
+                } else {
+                    return dateValue; // Invalid day/month/year components
+                }
+            } else {
+                return dateValue; // Not a date format we can handle
+            }
+        } catch (e) {
+            return dateValue; // Failed manual parsing
         }
-
-        // Use 'en-GB' locale for guaranteed dd/mm/yyyy format
-        return date.toLocaleDateString('en-GB');
-
-    } catch (e) {
-        return isoDateString; // Return original if an error occurs during parsing
     }
+
+    // 3. Final formatting if a valid date object was created
+    if (!isNaN(date.getTime())) {
+        // Use 'en-GB' locale for guaranteed dd/mm/yyyy format
+        // Use timeZone: 'UTC' to respect the manually constructed UTC date
+        return date.toLocaleDateString('en-GB', { timeZone: 'UTC' });
+    }
+
+    return dateValue; // Fallback
 }
 
 
-// Fields that contain ISO-formatted dates and need conversion
+// Fields that contain dates and need conversion
 const DATE_FIELDS = [
     "Loandate", 
     "Due Date", 
     "Last Receipt Date", 
-    "Demand Notice Sent Date",
+    "Demand Notice Sent Date", 
     "CQ DATE/PRESENTATION DATE", 
     "CQ RETURN DATE", 
     "HANDED OVER DATE", 
@@ -36,81 +68,80 @@ const DATE_FIELDS = [
 
 
 // API URL now points to the Netlify Function proxy
-const API_URL = "/.netlify/functions/fetch-data"; 
+const API_URL = "/.netlify/functions/fetch-data"; 
 
 // The secret key is now ONLY for the client-side check to enable the form.
-const CLIENT_SIDE_AUTH_KEY = "123"; 
+const CLIENT_SIDE_AUTH_KEY = "123"; 
 
 const DISPLAY_BLOCKS = [
-    {
-        title: "1) Customer & Loan Details",
-        fields: {
-            "Loan Branch": "Branch",
-            "Loan No": "Loan No",
-            "Customer Name": "Customer Name",
-            "Mobile": "Mobile",
-            "Loandate": "Loan Date",
-            "Loan Amount": "Loan Amount",
-            "EMI": "EMI",
-            "Due Date": "Due Date",
-            "Tenure": "Tenure",
-            "Paid": "Paid",
-            "Arrear": "Arrear",
-            "Arrear Amount": "Arrear Amount",
-            "Loan Balance": "Loan Balance",
-            "Arrear From To": "Arrear From To",
-            "Status": "Status",
-            "Last Receipt Date": "Last Receipt Date",
-        }
-    },
-    {
-        title: "2) Legal Action Recommendation & Remarks",
-        fields: {
-            "Demand Notice Sent Date": "Demand Notice Sent Date",
-            "V P Remarks": "V P Remarks",
-            "Legal Remarks": "Legal Remarks",
-        }
-    },
-    {
-        title: "3) Cheque return status",
-        fields: {
-            "CHEQ. NO.": "Cheque Number",
-            "CQ DATE/PRESENTATION DATE": "Cheque presentation Date",
-            "CQ RETURN DATE": "Cheque return Date",
-            "AMOUNT": "AMOUNT",
-            "B/G": "Borrower / Guarantor",
-            "BANK": "BANK",
-            "REMARKS": "REMARKS",
-            "ADVOCATE": "ADVOCATE", 
-            "HANDED OVER DATE": "HANDED OVER DATE",
-            "Notice Remarks": "Notice Remarks",
-            "CASE FILED": "CASE FILED",
-            "CASE NO": "CASE NO", 
-        }
-    },
-    {
-        title: "4) Section 9",
-        fields: {
-            "Sec 09 Filing Date": "Sec-09 Filing Date",
-            "Sec 09 Filing Amt": "Sec-09 Filing Amount",
-            "Advocate9": "Advocate", 
-            "CASE NO9": "CASE NO", 
-            "Attachment eff Date": "Attachment eff Date",
-        }
-    },
-    {
-        title: "5) Charges",
-        fields: {
-            "Demand Notice Expense": "Demand Notice Expense",
-            "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Exprense": "Sec-138 Expense",
-        }
-    }
+    {
+        title: "1) Customer & Loan Details",
+        fields: {
+            "Loan Branch": "Branch",
+            "Loan No": "Loan No",
+            "Customer Name": "Customer Name",
+            "Mobile": "Mobile",
+            "Loandate": "Loan Date",
+            "Loan Amount": "Loan Amount",
+            "EMI": "EMI",
+            "Due Date": "Due Date",
+            "Tenure": "Tenure",
+            "Paid": "Paid",
+            "Arrear": "Arrear",
+            "Arrear Amount": "Arrear Amount",
+            "Loan Balance": "Loan Balance",
+            "Arrear From To": "Arrear From To",
+            "Status": "Status",
+            "Last Receipt Date": "Last Receipt Date",
+        }
+    },
+    {
+        title: "2) Legal Action Recommendation & Remarks",
+        fields: {
+            "Demand Notice Sent Date": "Demand Notice Sent Date",
+            "V P Remarks": "V P Remarks",
+            "Legal Remarks": "Legal Remarks",
+        }
+    },
+    {
+        title: "3) Cheque return status",
+        fields: {
+            "CHEQ. NO.": "Cheque Number",
+            "CQ DATE/PRESENTATION DATE": "Cheque presentation Date",
+            "CQ RETURN DATE": "Cheque return Date",
+            "AMOUNT": "AMOUNT",
+            "B/G": "Borrower / Guarantor",
+            "BANK": "BANK",
+            "REMARKS": "REMARKS",
+            "ADVOCATE": "ADVOCATE", 
+            "HANDED OVER DATE": "HANDED OVER DATE",
+            "Notice Remarks": "Notice Remarks",
+            "CASE FILED": "CASE FILED",
+            "CASE NO": "CASE NO", 
+        }
+    },
+    {
+        title: "4) Section 9",
+        fields: {
+            "Sec 09 Filing Date": "Sec-09 Filing Date",
+            "Sec 09 Filing Amt": "Sec-09 Filing Amount",
+            "Advocate9": "Advocate", // Must match Google Sheet column header exactly!
+            "CASE NO9": "CASE NO",   // Must match Google Sheet column header exactly!
+            "Attachment eff Date": "Attachment eff Date",
+        }
+    },
+    {
+        title: "5) Charges",
+        fields: {
+            "Demand Notice Expense": "Demand Notice Expense",
+            "Sec 09 Expense": "Sec-09 Expense",
+            "Sec.138 Exprense": "Sec-138 Expense",
+        }
+    }
 ];
 
 
 // DOM ELEMENTS (Unchanged)
-
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -125,169 +156,159 @@ const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
 
-const HEADER_INPUT = document.getElementById('header_name'); 
+const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
 
-
 // 1. READ OPERATION (Search Loan by Number)
-
-
 SEARCH_BUTTON.addEventListener('click', searchLoan);
 
 async function searchLoan() {
-    const loanNo = LOAN_INPUT.value.trim();
-    if (!loanNo) {
-        LOADING_STATUS.textContent = 'Please enter a Loan No.';
-        return;
-    }
+    const loanNo = LOAN_INPUT.value.trim();
+    if (!loanNo) {
+        LOADING_STATUS.textContent = 'Please enter a Loan No.';
+        return;
+    }
 
-    LOADING_STATUS.textContent = `Searching for Loan No: ${loanNo}...`;
-    DATA_VIEW_SECTION.style.display = 'none';
-    NOT_FOUND_MESSAGE.style.display = 'none';
+    LOADING_STATUS.textContent = `Searching for Loan No: ${loanNo}...`;
+    DATA_VIEW_SECTION.style.display = 'none';
+    NOT_FOUND_MESSAGE.style.display = 'none';
 
-    try {
-        const response = await fetch(`${API_URL}?loan_no=${encodeURIComponent(loanNo)}`, {
-            method: 'GET',
-            mode: 'cors' 
-        });
+    try {
+        const response = await fetch(`${API_URL}?loan_no=${encodeURIComponent(loanNo)}`, {
+            method: 'GET',
+            mode: 'cors' 
+        });
 
-        const result = await response.json();
+        const result = await response.json();
 
-        if (result.status === 'success' && result.data && result.data.length > 0) {
-            renderBlocks(result.data[0]);
-            LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
-        } else {
-            LOADING_STATUS.textContent = 'Search complete.';
-            DATA_BLOCKS_CONTAINER.innerHTML = '';
-            NOT_FOUND_MESSAGE.textContent = `❌ No record found for Loan No: ${loanNo}.`;
-            NOT_FOUND_MESSAGE.style.display = 'block';
-            DATA_VIEW_SECTION.style.display = 'block';
-        }
+        if (result.status === 'success' && result.data && result.data.length > 0) {
+            renderBlocks(result.data[0]);
+            LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
+        } else {
+            LOADING_STATUS.textContent = 'Search complete.';
+            DATA_BLOCKS_CONTAINER.innerHTML = '';
+            NOT_FOUND_MESSAGE.textContent = `❌ No record found for Loan No: ${loanNo}.`;
+            NOT_FOUND_MESSAGE.style.display = 'block';
+            DATA_VIEW_SECTION.style.display = 'block';
+        }
 
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        LOADING_STATUS.textContent = '❌ Network Error. Could not connect to API.';
-    }
+    } catch (error) {
+        console.error("Error fetching data:", error);
+        LOADING_STATUS.textContent = '❌ Network Error. Could not connect to API.';
+    }
 }
 
 function renderBlocks(record) {
-    DATA_BLOCKS_CONTAINER.innerHTML = '';
-    DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    DATA_VIEW_SECTION.style.display = 'block';
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+    DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
+    DATA_VIEW_SECTION.style.display = 'block';
 
-    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
-        const block = document.createElement('div');
-        block.className = 'data-block';
+    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
+        const block = document.createElement('div');
+        block.className = 'data-block';
 
-        // --- DESIGN CHANGE IMPLEMENTATION ---
-        if (index === 0) {
-            // Requirement 1: Customer & Loan Details (Block 1) should be horizontal grid
-            block.classList.add('horizontal-grid');
-        } else if (index === 1) {
-            // Requirement 2: Legal Action Recommendation & Remarks (Block 2) needs label highlighting
-            block.classList.add('legal-remarks');
-        }
-       
-        
-        const title = document.createElement('h3');
-        title.textContent = blockConfig.title;
-        block.appendChild(title);
-        
-        // Create a wrapper for the content to apply grid/flex rules to
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'data-block-content';
-        
-        Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-            let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
+        // --- DESIGN CHANGE IMPLEMENTATION ---
+        if (index === 0) {
+            block.classList.add('horizontal-grid');
+        } else if (index === 1) {
+            block.classList.add('legal-remarks');
+        }
+        
+        const title = document.createElement('h3');
+        title.textContent = blockConfig.title;
+        block.appendChild(title);
+        
+        // Create a wrapper for the content to apply grid/flex rules to
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'data-block-content';
+        
+        Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
+            let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             // Apply date formatting if the sheetHeader is in the DATE_FIELDS array
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
             }
-            
-            const item = document.createElement('div');
-            item.className = 'data-block-item';
-            
-            const label = document.createElement('span');
-            label.className = 'item-label';
-            label.textContent = `${displayName}:`;
-            
-            const dataValue = document.createElement('span');
-            dataValue.className = 'item-value';
-            dataValue.textContent = value;
-            
-            item.appendChild(label);
-            item.appendChild(dataValue);
-            contentWrapper.appendChild(item);
-        });
+            
+            const item = document.createElement('div');
+            item.className = 'data-block-item';
+            
+            const label = document.createElement('span');
+            label.className = 'item-label';
+            label.textContent = `${displayName}:`;
+            
+            const dataValue = document.createElement('span');
+            dataValue.className = 'item-value';
+            dataValue.textContent = value;
+            
+            item.appendChild(label);
+            item.appendChild(dataValue);
+            contentWrapper.appendChild(item);
+        });
 
-        block.appendChild(contentWrapper);
-        DATA_BLOCKS_CONTAINER.appendChild(block);
-    });
+        block.appendChild(contentWrapper);
+        DATA_BLOCKS_CONTAINER.appendChild(block);
+    });
 }
 
 
 // 2. UI Toggling (Unchanged)
-
-
 function showInputForm() {
-    const enteredKey = AUTH_KEY_INPUT.value;
-    
-    if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'block';
-        AUTH_KEY_INPUT.style.display = 'none';
-        AUTH_BUTTON.style.display = 'none';
-        AUTH_LABEL.textContent = 'Write Access Granted.';
-        alert('Write access enabled! Please fill out the form.');
-    } else {
-        alert('Authorization failed. Please enter the correct secret key.');
-        AUTH_KEY_INPUT.value = '';
-    }
+    const enteredKey = AUTH_KEY_INPUT.value;
+    
+    if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
+        FORM.style.display = 'block';
+        AUTH_KEY_INPUT.style.display = 'none';
+        AUTH_BUTTON.style.display = 'none';
+        AUTH_LABEL.textContent = 'Write Access Granted.';
+        alert('Write access enabled! Please fill out the form.');
+    } else {
+        alert('Authorization failed. Please enter the correct secret key.');
+        AUTH_KEY_INPUT.value = '';
+    }
 }
 
 
-
 // 3. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
-
 FORM.addEventListener('submit', async function(event) {
-    event.preventDefault();
-    MESSAGE_ELEMENT.textContent = 'Submitting...';
+    event.preventDefault();
+    MESSAGE_ELEMENT.textContent = 'Submitting...';
 
-    const keyToSubmit = AUTH_KEY_INPUT.value;
-    const headerName = HEADER_INPUT.value.trim();
-    const dataValue = DATA_INPUT.value;
-    
-    if (!keyToSubmit || !headerName || !dataValue) {
-        MESSAGE_ELEMENT.textContent = '❌ Error: All fields are required.';
-        return;
-    }
+    const keyToSubmit = AUTH_KEY_INPUT.value;
+    const headerName = HEADER_INPUT.value.trim();
+    const dataValue = DATA_INPUT.value;
+    
+    if (!keyToSubmit || !headerName || !dataValue) {
+        MESSAGE_ELEMENT.textContent = '❌ Error: All fields are required.';
+        return;
+    }
 
-    const dataToSend = {};
-    dataToSend[headerName] = dataValue; 
-    dataToSend["authKey"] = keyToSubmit; 
+    const dataToSend = {};
+    dataToSend[headerName] = dataValue; 
+    dataToSend["authKey"] = keyToSubmit; 
 
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            mode: 'cors', 
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            mode: 'cors', 
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dataToSend)
+        });
 
-        const result = await response.json();
+        const result = await response.json();
 
-        if (result.status === 'success') {
-            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
-            FORM.reset(); 
-        } else {
-            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
-        }
+        if (result.status === 'success') {
+            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
+            FORM.reset(); 
+        } else {
+            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
+        }
 
-    } catch (error) {
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API.';
-        console.error("Submission error:", error);
-    }
+    } catch (error) {
+        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API.';
+        console.error("Submission error:", error);
+    }
 });
