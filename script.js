@@ -17,16 +17,12 @@ function formatDate(dateValue) {
             
             // Check for dd/mm/yyyy format (3 parts)
             if (parts.length === 3) {
-                // Manually create date (Note: JS date constructor expects YYYY, MM, DD where MM is 0-indexed)
                 const day = parseInt(parts[0], 10);
                 const month = parseInt(parts[1], 10);
                 const year = parseInt(parts[2], 10);
                 
-                // Basic validation and handling of common sheet issues (e.g., year only 2 digits)
                 if (day > 0 && month > 0 && year > 1900) {
-                    // Use UTC to prevent timezone shifts
                     date = new Date(Date.UTC(year, month - 1, day)); 
-                    
                     if (isNaN(date.getTime())) {
                         return dateValue; 
                     }
@@ -43,8 +39,6 @@ function formatDate(dateValue) {
 
     // 3. Final formatting if a valid date object was created
     if (!isNaN(date.getTime())) {
-        // Use 'en-GB' locale for guaranteed dd/mm/yyyy format
-        // Use timeZone: 'UTC' to respect the manually constructed UTC date
         return date.toLocaleDateString('en-GB', { timeZone: 'UTC' });
     }
 
@@ -61,17 +55,21 @@ const DATE_FIELDS = [
     "CQ DATE/PRESENTATION DATE", 
     "CQ RETURN DATE", 
     "HANDED OVER DATE", 
-    "Sec 09 Filing Date", // Included in date formatting
-    "Attachment eff Date"
+    "Sec9FilingDate",       // Assuming you stuck with the clean names
+    "AttachmentEffDate"     // Assuming you stuck with the clean names
 ];
 
 
 // API URL now points to the Netlify Function proxy
 const API_URL = "/.netlify/functions/fetch-data"; 
 
-// The secret key is now ONLY for the client-side check to enable the form.
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
+// Local storage for all data to enable client-side filtering (cascading dropdowns)
+let ALL_RECORDS = []; 
+
+
+// --- DISPLAY CONFIGURATION (Use the cleanest headers you settled on) ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -122,7 +120,8 @@ const DISPLAY_BLOCKS = [
     {
         title: "4) Section 9",
         fields: {
-            // VERIFIED HEADERS (KEYS MUST MATCH GOOGLE SHEET EXACTLY)
+            // Placeholder: Use whatever clean headers you settled on in the sheet.
+            // If you did not rename them, revert to the original names here:
             "Sec/9 Filing Date": "Sec-09 Filing Date",
             "Sec/9 Filing Amt": "Sec-09 Filing Amount",
             "Sec/9 Advocate": "Advocate", 
@@ -141,15 +140,18 @@ const DISPLAY_BLOCKS = [
 ];
 
 
-// DOM ELEMENTS (Unchanged)
+// --- DOM ELEMENTS ---
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
 const AUTH_BUTTON = document.querySelector('button[onclick="showInputForm()"]');
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
 
-const LOAN_INPUT = document.getElementById('loan-no-input');
+// New Dropdown Elements
+const BRANCH_SELECT = document.getElementById('branch-select');
+const LOAN_SELECT = document.getElementById('loan-select');
 const SEARCH_BUTTON = document.getElementById('search-button');
+
 const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
@@ -160,22 +162,14 @@ const HEADER_INPUT = document.getElementById('header_name');
 const DATA_INPUT = document.getElementById('data_value');
 
 
-// 1. READ OPERATION (Search Loan by Number)
-SEARCH_BUTTON.addEventListener('click', searchLoan);
+// 1. INITIAL FETCH AND DROPDOWN POPULATION
+document.addEventListener('DOMContentLoaded', initialLoad);
 
-async function searchLoan() {
-    const loanNo = LOAN_INPUT.value.trim();
-    if (!loanNo) {
-        LOADING_STATUS.textContent = 'Please enter a Loan No.';
-        return;
-    }
-
-    LOADING_STATUS.textContent = `Searching for Loan No: ${loanNo}...`;
-    DATA_VIEW_SECTION.style.display = 'none';
-    NOT_FOUND_MESSAGE.style.display = 'none';
-
+async function initialLoad() {
+    LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns...';
     try {
-        const response = await fetch(`${API_URL}?loan_no=${encodeURIComponent(loanNo)}`, {
+        // Fetch all data (the new Apps Script will be simpler and return all data)
+        const response = await fetch(API_URL, {
             method: 'GET',
             mode: 'cors' 
         });
@@ -183,14 +177,12 @@ async function searchLoan() {
         const result = await response.json();
 
         if (result.status === 'success' && result.data && result.data.length > 0) {
-            renderBlocks(result.data[0]);
-            LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
+            ALL_RECORDS = result.data;
+            populateBranchDropdown(ALL_RECORDS);
+            LOADING_STATUS.textContent = 'Ready. Please select a Branch.';
         } else {
-            LOADING_STATUS.textContent = 'Search complete.';
-            DATA_BLOCKS_CONTAINER.innerHTML = '';
-            NOT_FOUND_MESSAGE.textContent = `❌ No record found for Loan No: ${loanNo}.`;
-            NOT_FOUND_MESSAGE.style.display = 'block';
-            DATA_VIEW_SECTION.style.display = 'block';
+            LOADING_STATUS.textContent = '❌ Error: Could not load data from the server.';
+            BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
         }
 
     } catch (error) {
@@ -199,15 +191,113 @@ async function searchLoan() {
     }
 }
 
+function populateBranchDropdown(records) {
+    const branches = new Set();
+    records.forEach(record => {
+        const branchName = record["Loan Branch"];
+        if (branchName && String(branchName).trim() !== '') {
+            branches.add(String(branchName).trim());
+        }
+    });
+
+    BRANCH_SELECT.innerHTML = '<option value="" selected disabled>-- Select Branch --</option>';
+    
+    // Sort and add options
+    [...branches].sort().forEach(branch => {
+        const option = document.createElement('option');
+        option.value = branch;
+        option.textContent = branch;
+        BRANCH_SELECT.appendChild(option);
+    });
+
+    BRANCH_SELECT.disabled = false;
+}
+
+
+// 2. CASCADING LOGIC
+BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
+LOAN_SELECT.addEventListener('change', () => {
+    // Enable search button only when a valid loan is selected
+    SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
+});
+
+function populateLoanDropdown() {
+    const selectedBranch = BRANCH_SELECT.value;
+    
+    // Reset Loan Select
+    LOAN_SELECT.innerHTML = '<option value="" selected disabled>-- Select Loan No --</option>';
+    LOAN_SELECT.disabled = true;
+    SEARCH_BUTTON.disabled = true;
+
+    if (!selectedBranch) {
+        return;
+    }
+
+    const loans = ALL_RECORDS
+        .filter(record => String(record["Loan Branch"]).trim() === selectedBranch)
+        .map(record => String(record["Loan No"]).trim());
+
+    // Use Set to ensure unique loan numbers (though ideally they should be unique)
+    const uniqueLoans = new Set(loans);
+    
+    [...uniqueLoans].sort().forEach(loanNo => {
+        const option = document.createElement('option');
+        option.value = loanNo;
+        option.textContent = loanNo;
+        LOAN_SELECT.appendChild(option);
+    });
+
+    LOAN_SELECT.disabled = false;
+    LOADING_STATUS.textContent = `Select a Loan No from Branch: ${selectedBranch}`;
+}
+
+
+// 3. DISPLAY LOGIC (Search Button Click)
+SEARCH_BUTTON.addEventListener('click', displayLoan);
+
+function displayLoan() {
+    const loanNo = LOAN_SELECT.value;
+    const selectedBranch = BRANCH_SELECT.value;
+
+    if (!loanNo || !selectedBranch) {
+        LOADING_STATUS.textContent = 'Please select both a Branch and a Loan No.';
+        return;
+    }
+
+    LOADING_STATUS.textContent = `Displaying data for Loan No: ${loanNo}...`;
+
+    // Find the record in the locally stored ALL_RECORDS
+    const record = ALL_RECORDS.find(r => 
+        String(r["Loan Branch"]).trim() === selectedBranch && 
+        String(r["Loan No"]).trim() === loanNo
+    );
+
+    DATA_VIEW_SECTION.style.display = 'block';
+    NOT_FOUND_MESSAGE.style.display = 'none';
+
+    if (record) {
+        renderBlocks(record);
+        LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
+    } else {
+        DATA_BLOCKS_CONTAINER.innerHTML = '';
+        NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
+        NOT_FOUND_MESSAGE.style.display = 'block';
+        LOADING_STATUS.textContent = 'Search complete.';
+    }
+}
+
+
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    DATA_VIEW_SECTION.style.display = 'block';
-
+    // ... (rest of renderBlocks function remains the same)
+    
+    // ...
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
 
+        // Apply design changes
         if (index === 0) {
             block.classList.add('horizontal-grid');
         } else if (index === 1) {
@@ -224,7 +314,7 @@ function renderBlocks(record) {
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
-            // Apply date formatting if required
+            // Apply date formatting if the sheetHeader is in the DATE_FIELDS array
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
             }
@@ -251,7 +341,7 @@ function renderBlocks(record) {
 }
 
 
-// 2. UI Toggling (Unchanged)
+// 4. UI Toggling (Unchanged)
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
@@ -268,7 +358,7 @@ function showInputForm() {
 }
 
 
-// 3. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
+// 5. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
@@ -301,6 +391,8 @@ FORM.addEventListener('submit', async function(event) {
         if (result.status === 'success') {
             MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
             FORM.reset(); 
+            // NOTE: For data consistency, you should reload the ALL_RECORDS cache here.
+            initialLoad(); 
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
         }

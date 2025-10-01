@@ -11,9 +11,22 @@
 
     <section id="data-search">
         <h2>Loan Search</h2>
-        <label for="loan-no-input">Enter Loan No (e.g., C001):</label>
-        <input type="text" id="loan-no-input" value="" placeholder="Enter Loan No..." required>
-        <button id="search-button">Search Loan</button>
+        
+        <label for="branch-select">Select Branch:</label>
+        <select id="branch-select" required>
+            <option value="">-- Loading Branches --</option>
+        </select>
+        
+        <br><br>
+
+        <label for="loan-select">Select Loan No:</label>
+        <select id="loan-select" required disabled>
+            <option value="">-- Select Branch First --</option>
+        </select>
+        
+        <br><br>
+
+        <button id="search-button" disabled>Display Loan Data</button>
         <p id="loading-status"></p>
     </section>
 
