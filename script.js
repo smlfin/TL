@@ -169,7 +169,7 @@ const DISPLAY_BLOCKS = [
         fields: {
             "Demand Notice Expense": "Demand Notice Expense",
             "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Expense": "Sec-138 Expense",
+            "Sec.138 Exprense": "Sec-138 Expense", // FIXED: Was "Sec.138 Exprense"
         }
     }
 ];
@@ -179,7 +179,7 @@ const DISPLAY_BLOCKS = [
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
-const AUTH_BUTTON = document.getElementById('enable-input-button'); // Corrected lookup
+const AUTH_BUTTON = document.getElementById('enable-input-button'); 
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
 
 // Dropdown Elements
@@ -358,30 +358,33 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - CORRECTED LOGIC
+// RENDER BLOCKS FUNCTION - MODIFIED LOGIC
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-    // Create the main content grid wrapper for blocks 2-5
+    // Create the wrapper for blocks 2, 4, and 5 (the two-column grid)
     const detailGridWrapper = document.createElement('div');
     detailGridWrapper.id = 'detail-content-grid'; 
 
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
+        
+        let parentContainer;
 
-        if (index === 0) {
-            // Block 1: Always full width, handles its own horizontal grid
+        if (index === 0 || index === 2) { 
+            // Block 1 (Customer Details) and Block 3 (Cheque Status) are full-width horizontal grids
             block.classList.add('horizontal-grid');
-            DATA_BLOCKS_CONTAINER.appendChild(block); 
+            parentContainer = DATA_BLOCKS_CONTAINER; 
         } else {
-            // Blocks 2 through 5 will go into the new detailGridWrapper
+            // Blocks 2, 4, 5 go into the detailGridWrapper (75%/25% two-column layout)
             block.classList.add(`block-${index + 1}`); 
 
             if (index === 1) { // Block 2 (Legal Remarks)
                 block.classList.add('legal-remarks');
             }
+            parentContainer = detailGridWrapper;
         }
         
         const title = document.createElement('h3');
@@ -443,14 +446,14 @@ function renderBlocks(record) {
 
         block.appendChild(contentWrapper);
         
-        // Append blocks 2-5 to the wrapper, Block 1 was appended above.
-        if (index > 0) {
-            detailGridWrapper.appendChild(block); 
-        }
+        // Append the block to the determined container
+        parentContainer.appendChild(block);
     });
 
-    // Append the new wrapper containing blocks 2-5 after Block 1 is done
-    DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
+    // Append the two-column wrapper only if it collected any blocks
+    if (detailGridWrapper.children.length > 0) {
+        DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
+    }
 }
 
 
