@@ -290,54 +290,94 @@ function displayLoan() {
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    // ... (rest of renderBlocks function remains the same)
     
-    // ...
+    // Create the main content grid wrapper for blocks 2-5
+    const detailGridWrapper = document.createElement('div');
+    detailGridWrapper.id = 'detail-content-grid'; // New ID for CSS grid layout
+
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
 
-        // Apply design changes
         if (index === 0) {
+            // Block 1: Always full width, handles its own horizontal grid
             block.classList.add('horizontal-grid');
-        } else if (index === 1) {
-            block.classList.add('legal-remarks');
-        }
-        
-        const title = document.createElement('h3');
-        title.textContent = blockConfig.title;
-        block.appendChild(title);
-        
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'data-block-content';
-        
-        Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-            let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
-            
-            // Apply date formatting if the sheetHeader is in the DATE_FIELDS array
-            if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-                value = formatDate(value);
+            DATA_BLOCKS_CONTAINER.appendChild(block); // Append Block 1 directly to the main container
+        } else {
+            // Blocks 2 through 5 will go into the new detailGridWrapper
+            // The position in the grid will be handled by CSS based on the block ID/class
+            block.classList.add(`block-${index + 1}`); 
+
+            if (index === 1) {
+                block.classList.add('legal-remarks');
             }
             
-            const item = document.createElement('div');
-            item.className = 'data-block-item';
+            // ... (The rest of the rendering logic for the block content is unchanged)
             
-            const label = document.createElement('span');
-            label.className = 'item-label';
-            label.textContent = `${displayName}:`;
+            const title = document.createElement('h3');
+            title.textContent = blockConfig.title;
+            block.appendChild(title);
             
-            const dataValue = document.createElement('span');
-            dataValue.className = 'item-value';
-            dataValue.textContent = value;
+            const contentWrapper = document.createElement('div');
+            contentWrapper.className = 'data-block-content';
             
-            item.appendChild(label);
-            item.appendChild(dataValue);
-            contentWrapper.appendChild(item);
-        });
+            Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
+                let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
+                
+                // Apply date formatting
+                if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
+                    value = formatDate(value);
+                }
+                
+                const item = document.createElement('div');
+                item.className = 'data-block-item';
+                
+                const label = document.createElement('span');
+                label.className = 'item-label';
+                label.textContent = `${displayName}:`;
+                
+                const dataValue = document.createElement('span');
+                dataValue.className = 'item-value';
+                dataValue.textContent = value;
+                
+                // Apply CRITICAL HIGHLIGHT
+                if (CRITICAL_FIELDS.includes(sheetHeader)) {
+                    dataValue.classList.add('critical-value');
+                }
+                
+                item.appendChild(label);
+                item.appendChild(dataValue);
+                contentWrapper.appendChild(item);
+            });
 
-        block.appendChild(contentWrapper);
-        DATA_BLOCKS_CONTAINER.appendChild(block);
+            // Calculate and append Total Charges for Block 5
+            if (index === 4) { // Block 5: Charges
+                const total = calculateTotalCharges(record);
+                const totalItem = document.createElement('div');
+                totalItem.className = 'data-block-item total-charges'; 
+
+                const label = document.createElement('span');
+                label.className = 'item-label';
+                label.textContent = `TOTAL CHARGES:`;
+
+                const dataValue = document.createElement('span');
+                dataValue.className = 'item-value critical-value'; 
+                
+                // Format to currency with two decimal places
+                dataValue.textContent = total.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+                totalItem.appendChild(label);
+                totalItem.appendChild(dataValue);
+                contentWrapper.appendChild(totalItem);
+            }
+
+            block.appendChild(contentWrapper);
+            detailGridWrapper.appendChild(block); // Append blocks 2-5 to the wrapper
+        }
     });
+
+    // Append the new wrapper containing blocks 2-5 after Block 1 is done
+    DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
 }
 
 
