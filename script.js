@@ -183,11 +183,11 @@ const DISPLAY_BLOCKS = [
     {
         title: "4) Section 9 Status",
         fields: {
-            "Sec9FilingDate": "Sec-09 Filing Date",
-            "Sec9FilingAmt": "Sec-09 Filing Amount",
-            "AdvocateSec9": "Advocate", 
-            "CASENOSec9": "CASE NO",   
-            "AttachmentEffDate": "Attachment eff Date",
+            "Sec/9 Filing Date": "Sec-09 Filing Date",
+            "Sec/9 Filing Amt": "Sec-09 Filing Amount",
+            "Sec/9 Advocate": "Advocate", 
+            "Sec/9 Case No": "CASE NO",   
+            "Attachment eff Date": "Attachment eff Date",
         }
     },
     // --- NEW BLOCK 5 (Index 4) ---
@@ -210,10 +210,10 @@ const DISPLAY_BLOCKS = [
     {
         title: "6) Section 09 Fee & Charges",
         fields: {
-            "Taken Expense for Sec 09 filing": "Taken Expense for Sec 09 filing",
+            "Schedule Taken Expense for Sec 09 filing": "Schedule Taken Expense for Sec 09 filing",
             "POA for Filing Sec 09": "POA for Filing Sec 09",
             "Initial Fee for Sec 09": "Initial Fee for Sec 09",
-            "GST of Sec 09, Initial Fee": "GST of Sec 09, Initial Fee",
+            "GST of Sec 09 Initial Fee": "GST of Sec 09 Initial Fee",
             "TDS of Initial Fee": "TDS of Initial Fee",
             "Fresh Notice Expense for Filing Sec 09": "Fresh Notice Expense for Filing Sec 09",
             "Attachment Batta For Sec 09": "Attachment Batta For Sec 09",
@@ -412,33 +412,24 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - MODIFIED LOGIC
+// RENDER BLOCKS FUNCTION - **UPDATED LOGIC**
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-    // Create the wrapper for blocks 2, 4, 5, 6 (the two-column grid)
-    const detailGridWrapper = document.createElement('div');
-    detailGridWrapper.id = 'detail-content-grid'; 
-
+    // 1. Create all block elements and store them
+    const blockElements = {};
+    
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
-        block.className = 'data-block';
-        
-        let parentContainer;
+        const blockNumber = index + 1;
+        block.classList.add('data-block', `block-${blockNumber}`);
 
-        if (index === 0 || index === 2) { 
-            // Block 1 (index 0) and Block 3 (index 2) are full-width horizontal grids
+        // Set class for horizontal grid (1, 3, 5, 6) or specific classes (2)
+        if (blockNumber === 1 || blockNumber === 3 || blockNumber === 5 || blockNumber === 6) { 
             block.classList.add('horizontal-grid');
-            parentContainer = DATA_BLOCKS_CONTAINER; 
-        } else {
-            // Blocks 2, 4, 5, 6 (indices 1, 3, 4, 5) go into the detailGridWrapper
-            block.classList.add(`block-${index + 1}`); 
-
-            if (index === 1) { // Block 2 (Legal Remarks)
-                block.classList.add('legal-remarks');
-            }
-            parentContainer = detailGridWrapper;
+        } else if (blockNumber === 2) { 
+             block.classList.add('legal-remarks');
         }
         
         const title = document.createElement('h3');
@@ -470,7 +461,8 @@ function renderBlocks(record) {
                 
                 const formattedValue = parseNumber(value);
                 
-                // If the value was successfully converted to a currency string
+                // Check if the value was successfully converted to a currency string (starts with ₹) 
+                // or if it was successfully parsed but not equal to the original value (meaning formatting happened).
                 if (typeof formattedValue === 'string' && formattedValue.startsWith('₹') || (formattedValue !== value && !isNaN(parseFloat(String(formattedValue).replace(/[$,]/g, '').trim())))) {
                     value = formattedValue;
                 }
@@ -498,19 +490,39 @@ function renderBlocks(record) {
             contentWrapper.appendChild(item);
         });
 
-        // NOTE: The old logic for displaying the 'Total Charges' at the bottom of the previous 5th block is REMOVED.
-        // The total is correctly displayed in the 'Snapshot Box' now using the comprehensive CHARGE_FIELDS list.
-
         block.appendChild(contentWrapper);
-        
-        // Append the block to the determined container
-        parentContainer.appendChild(block);
+        blockElements[blockNumber] = block;
     });
 
-    // Append the two-column wrapper only if it collected any blocks
+    // 2. Assemble the DOM structure in the correct order: B1, Grid (B2, B4), B3, B5, B6
+    
+    // Create the two-column wrapper for blocks 2 and 4
+    const detailGridWrapper = document.createElement('div');
+    detailGridWrapper.id = 'detail-content-grid';
+    
+    // Append Block 2 and Block 4 into the detail grid
+    if (blockElements[2]) detailGridWrapper.appendChild(blockElements[2]);
+    if (blockElements[4]) detailGridWrapper.appendChild(blockElements[4]);
+    
+    // Clear and Append to the main container in the desired sequence
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+    
+    // B1 (Full Width/Horizontal Grid)
+    if (blockElements[1]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[1]);
+    
+    // Detail Grid (B2 & B4)
     if (detailGridWrapper.children.length > 0) {
         DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
     }
+    
+    // B3 (Full Width/Horizontal Grid)
+    if (blockElements[3]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[3]);
+    
+    // B5 (Full Width/Horizontal Grid)
+    if (blockElements[5]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[5]);
+    
+    // B6 (Full Width/Horizontal Grid)
+    if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
 }
 
 
