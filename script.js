@@ -364,21 +364,19 @@ function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-<<<<<<< HEAD
+
     // Create the main content grid wrapper for blocks 2-5
     const detailGridWrapper = document.createElement('div');
     detailGridWrapper.id = 'detail-content-grid'; // New ID for CSS grid layout
 
-=======
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
-    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
+   DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
 
         if (index === 0) {
             // Block 1: Always full width, handles its own horizontal grid
             block.classList.add('horizontal-grid');
-<<<<<<< HEAD
+
             DATA_BLOCKS_CONTAINER.appendChild(block); // Append Block 1 directly to the main container
         } else {
             // Blocks 2 through 5 will go into the new detailGridWrapper
@@ -387,7 +385,7 @@ function renderBlocks(record) {
 
             if (index === 1) {
                 block.classList.add('legal-remarks');
-=======
+
         } else if (index === 1) {
             block.classList.add('legal-remarks');
         }
@@ -405,10 +403,9 @@ function renderBlocks(record) {
             // Apply date formatting
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
+
             }
             
-            // ... (The rest of the rendering logic for the block content is unchanged)
             
             const title = document.createElement('h3');
             title.textContent = blockConfig.title;
@@ -417,7 +414,7 @@ function renderBlocks(record) {
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'data-block-content';
             
-<<<<<<< HEAD
+
             Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
                 let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
                 
@@ -471,7 +468,7 @@ function renderBlocks(record) {
             block.appendChild(contentWrapper);
             detailGridWrapper.appendChild(block); // Append blocks 2-5 to the wrapper
         }
-=======
+
             // Apply CRITICAL HIGHLIGHT
             if (CRITICAL_FIELDS.includes(sheetHeader)) {
                 dataValue.classList.add('critical-value');
@@ -505,7 +502,7 @@ function renderBlocks(record) {
 
         block.appendChild(contentWrapper);
         DATA_BLOCKS_CONTAINER.appendChild(block);
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
+
     });
 
     // Append the new wrapper containing blocks 2-5 after Block 1 is done
