@@ -1,4 +1,4 @@
-// Helper function to format date strings from Google Sheets to dd/mm/yyyy// Helper function to format date strings from Google Sheets to dd/mm/yyyy
+// Helper function to format date strings from Google Sheets to dd/mm/yyyy
 function formatDate(dateValue) {
     if (!dateValue || dateValue === 'N/A' || String(dateValue).startsWith('18')) {
         return dateValue;
@@ -145,25 +145,23 @@ const DISPLAY_BLOCKS = [
             "CQ RETURN DATE": "Cheque return Date",
             "AMOUNT": "AMOUNT",
             "B/G": "Borrower / Guarantor",
-            "BANK": "Bank",
-            "REMARKS": "Remarks",
-            "ADVOCATE": "Advocate", 
-            "HANDED OVER DATE": "Handed Over Date",
+            "BANK": "BANK",
+            "REMARKS": "REMARKS",
+            "ADVOCATE": "ADVOCATE", 
+            "HANDED OVER DATE": "HANDED OVER DATE",
             "Notice Remarks": "Notice Remarks",
-            "CASE FILED": "Case Filed",
-            "CASE NO": "Case No", 
+            "CASE FILED": "CASE FILED",
+            "CASE NO": "CASE NO", 
         }
     },
     {
         title: "4) Section 9",
         fields: {
-            // Placeholder: Use whatever clean headers you settled on in the sheet.
-            // If you did not rename them, revert to the original names here:
-            "Sec/9 Filing Date": "Sec-09 Filing Date",
-            "Sec/9 Filing Amt": "Sec-09 Filing Amount",
-            "Sec/9 Advocate": "Advocate", 
-            "Sec/9 Case No": "Case No",   
-            "Attachment eff Date": "Attachment eff Date",
+            "Sec9FilingDate": "Sec-09 Filing Date",
+            "Sec9FilingAmt": "Sec-09 Filing Amount",
+            "AdvocateSec9": "Advocate", 
+            "CASENOSec9": "CASE NO",   
+            "AttachmentEffDate": "Attachment eff Date",
         }
     },
     {
@@ -171,7 +169,7 @@ const DISPLAY_BLOCKS = [
         fields: {
             "Demand Notice Expense": "Demand Notice Expense",
             "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Exprense": "Sec-138 Expense",
+            "Sec.138 Expense": "Sec-138 Expense",
         }
     }
 ];
@@ -181,10 +179,10 @@ const DISPLAY_BLOCKS = [
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
-const AUTH_BUTTON = document.querySelector('button[onclick="showInputForm()"]');
+const AUTH_BUTTON = document.getElementById('enable-input-button'); // Corrected lookup
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
 
-// New Dropdown Elements
+// Dropdown Elements
 const BRANCH_SELECT = document.getElementById('branch-select');
 const LOAN_SELECT = document.getElementById('loan-select');
 const SEARCH_BUTTON = document.getElementById('search-button');
@@ -194,14 +192,14 @@ const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-// NEW SNAPSHOT BOX ELEMENT
+// SNAPSHOT BOX ELEMENT
 const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION - UNCHANGED
+// 1. INITIAL FETCH AND DROPDOWN POPULATION
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
@@ -251,7 +249,7 @@ function populateBranchDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC - UNCHANGED
+// 2. CASCADING LOGIC
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
@@ -310,7 +308,7 @@ function displayLoan() {
     NOT_FOUND_MESSAGE.style.display = 'none';
 
     if (record) {
-        renderSnapshot(record); // <--- NEW SNAPSHOT CALL
+        renderSnapshot(record); 
         renderBlocks(record);
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
     } else {
@@ -323,7 +321,7 @@ function displayLoan() {
 }
 
 
-// NEW: Function to format and render the snapshot box
+// Function to format and render the snapshot box
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = ''; // Clear previous data
 
@@ -359,35 +357,31 @@ function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = snapshotHTML;
 }
 
-// RENDER BLOCKS FUNCTION - UNCHANGED
+
+// RENDER BLOCKS FUNCTION - CORRECTED LOGIC
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-
     // Create the main content grid wrapper for blocks 2-5
     const detailGridWrapper = document.createElement('div');
-    detailGridWrapper.id = 'detail-content-grid'; // New ID for CSS grid layout
+    detailGridWrapper.id = 'detail-content-grid'; 
 
-   DISPLAY_BLOCKS.forEach((blockConfig, index) => {
+    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
 
         if (index === 0) {
             // Block 1: Always full width, handles its own horizontal grid
             block.classList.add('horizontal-grid');
-
-            DATA_BLOCKS_CONTAINER.appendChild(block); // Append Block 1 directly to the main container
+            DATA_BLOCKS_CONTAINER.appendChild(block); 
         } else {
             // Blocks 2 through 5 will go into the new detailGridWrapper
-            // The position in the grid will be handled by CSS based on the block ID/class
             block.classList.add(`block-${index + 1}`); 
 
-            if (index === 1) {
+            if (index === 1) { // Block 2 (Legal Remarks)
                 block.classList.add('legal-remarks');
-
-        } else if (index === 1) {
-            block.classList.add('legal-remarks');
+            }
         }
         
         const title = document.createElement('h3');
@@ -403,72 +397,19 @@ function renderBlocks(record) {
             // Apply date formatting
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
-
             }
             
+            const item = document.createElement('div');
+            item.className = 'data-block-item';
             
-            const title = document.createElement('h3');
-            title.textContent = blockConfig.title;
-            block.appendChild(title);
+            const label = document.createElement('span');
+            label.className = 'item-label';
+            label.textContent = `${displayName}:`;
             
-            const contentWrapper = document.createElement('div');
-            contentWrapper.className = 'data-block-content';
+            const dataValue = document.createElement('span');
+            dataValue.className = 'item-value';
+            dataValue.textContent = value;
             
-
-            Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-                let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
-                
-                // Apply date formatting
-                if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-                    value = formatDate(value);
-                }
-                
-                const item = document.createElement('div');
-                item.className = 'data-block-item';
-                
-                const label = document.createElement('span');
-                label.className = 'item-label';
-                label.textContent = `${displayName}:`;
-                
-                const dataValue = document.createElement('span');
-                dataValue.className = 'item-value';
-                dataValue.textContent = value;
-                
-                // Apply CRITICAL HIGHLIGHT
-                if (CRITICAL_FIELDS.includes(sheetHeader)) {
-                    dataValue.classList.add('critical-value');
-                }
-                
-                item.appendChild(label);
-                item.appendChild(dataValue);
-                contentWrapper.appendChild(item);
-            });
-
-            // Calculate and append Total Charges for Block 5
-            if (index === 4) { // Block 5: Charges
-                const total = calculateTotalCharges(record);
-                const totalItem = document.createElement('div');
-                totalItem.className = 'data-block-item total-charges'; 
-
-                const label = document.createElement('span');
-                label.className = 'item-label';
-                label.textContent = `TOTAL CHARGES:`;
-
-                const dataValue = document.createElement('span');
-                dataValue.className = 'item-value critical-value'; 
-                
-                // Format to currency with two decimal places
-                dataValue.textContent = total.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-                totalItem.appendChild(label);
-                totalItem.appendChild(dataValue);
-                contentWrapper.appendChild(totalItem);
-            }
-
-            block.appendChild(contentWrapper);
-            detailGridWrapper.appendChild(block); // Append blocks 2-5 to the wrapper
-        }
-
             // Apply CRITICAL HIGHLIGHT
             if (CRITICAL_FIELDS.includes(sheetHeader)) {
                 dataValue.classList.add('critical-value');
@@ -501,8 +442,11 @@ function renderBlocks(record) {
         }
 
         block.appendChild(contentWrapper);
-        DATA_BLOCKS_CONTAINER.appendChild(block);
-
+        
+        // Append blocks 2-5 to the wrapper, Block 1 was appended above.
+        if (index > 0) {
+            detailGridWrapper.appendChild(block); 
+        }
     });
 
     // Append the new wrapper containing blocks 2-5 after Block 1 is done
@@ -510,7 +454,7 @@ function renderBlocks(record) {
 }
 
 
-// 4. UI Toggling - UNCHANGED
+// 4. UI Toggling
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
@@ -527,7 +471,7 @@ function showInputForm() {
 }
 
 
-// 5. WRITE OPERATION - UNCHANGED
+// 5. WRITE OPERATION
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';

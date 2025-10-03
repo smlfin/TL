@@ -47,7 +47,7 @@ h2 {
     margin-bottom: 20px;
 }
 
-/* BUTTON STYLING - UNCHANGED */
+/* BUTTON STYLING */
 button {
     color: white;
     border: none;
@@ -85,7 +85,7 @@ button#enable-input-button:hover {
     background-color: #5a6268;
 }
 
-/* INPUT & SELECT STYLING - UNCHANGED */
+/* INPUT & SELECT STYLING */
 input[type="text"],
 input[type="password"],
 input[type="date"],
@@ -108,7 +108,7 @@ select:disabled {
     cursor: not-allowed;
 }
 
-/* SEARCH SECTION HORIZONTAL LAYOUT - UNCHANGED */
+/* SEARCH SECTION HORIZONTAL LAYOUT */
 .search-controls {
     display: flex;
     gap: 15px; 
@@ -134,69 +134,8 @@ select:disabled {
 }
 
 
-<<<<<<< HEAD
-/* SNAPSHOT BOX STYLING - UNCHANGED */
+/* SNAPSHOT BOX STYLING */
 #loan-snapshot-box {
-=======
-/* ------------------------------------------------------------- */
-/* SNAPSHOT BOX STYLING (NEW)                                    */
-/* ------------------------------------------------------------- */
-
-#loan-snapshot-box {
-    display: grid;
-    /* 4 equally sized columns */
-    grid-template-columns: repeat(4, 1fr); 
-    gap: 15px;
-    margin-bottom: 30px; /* Space before the data blocks */
-    padding: 15px;
-    background-color: var(--color-primary); /* Strong background */
-    border-radius: 8px;
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
-}
-
-.snapshot-item {
-    text-align: center;
-    padding: 10px;
-    background-color: var(--color-surface); 
-    border-radius: 4px;
-    /* Adding a subtle border for depth */
-    border: 1px solid #e9ecef; 
-}
-
-.snapshot-item .label {
-    display: block;
-    font-size: 0.8em;
-    color: var(--color-secondary);
-    margin-bottom: 4px;
-    font-weight: 500;
-}
-
-.snapshot-item .value {
-    display: block;
-    font-size: 1.3em;
-    font-weight: 700;
-}
-
-/* Color coding for quick distinction */
-.snapshot-item.danger .value {
-    color: var(--color-danger); 
-}
-.snapshot-item.primary .value {
-    color: var(--color-primary); 
-}
-.snapshot-item.success .value {
-    color: var(--color-success); 
-}
-.snapshot-item.total-color .value {
-    /* Use the primary color again for total, or a deep grey */
-    color: #343a40; 
-    font-size: 1.4em;
-}
-
-
-/* DATA DISPLAY STYLING - UNCHANGED EXCEPT FOR ITEM-VALUE */
-#data-blocks {
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
     display: grid;
     grid-template-columns: repeat(4, 1fr); 
     gap: 15px;
@@ -250,15 +189,15 @@ select:disabled {
 
 /* Main container is now a simple vertical flow for blocks 1 and the detail grid */
 #data-blocks {
-    display: block; /* Remove previous grid setting */
+    display: block; 
     margin-top: 20px;
 }
 
 /* New wrapper for blocks 2, 3, 4, 5 */
 #detail-content-grid {
     display: grid;
-    /* Main layout: 70% for Cheque/Remarks, 30% for Section 9/Charges */
-    grid-template-columns: 3fr 1fr; /* Approximately 75%/25% */
+    /* Main layout: 75% for Cheque/Remarks, 25% for Section 9/Charges */
+    grid-template-columns: 3fr 1fr; 
     gap: 20px;
     margin-top: 20px;
 }
@@ -285,7 +224,6 @@ select:disabled {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     position: relative;
     overflow: hidden;
-<<<<<<< HEAD
     margin-bottom: 20px; /* Add vertical space between blocks in the same column */
 }
 
@@ -302,11 +240,7 @@ select:disabled {
 }
 
 
-=======
-}
-
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
-/* Sticky Header - UNCHANGED */
+/* Sticky Header */
 .data-block h3 {
     margin-top: -15px; 
     margin-left: -15px;
@@ -322,22 +256,22 @@ select:disabled {
     z-index: 10;
 }
 
-/* Vertical Item Styling - UNCHANGED */
+/* Vertical Item Styling (used by blocks 2, 3, 4, 5) */
 .data-block-item {
     display: flex;
     justify-content: space-between;
-    padding: 12px 0; 
+    padding: 12px 0; /* Increased padding for remarks fields */
     border-bottom: 1px dotted #ced4da;
 }
 
-/* Zebra Striping - UNCHANGED */
+/* Zebra Striping */
 .data-block-item:nth-child(even) {
     background-color: var(--color-stripe);
     margin: 0 -15px; 
     padding: 12px 15px; 
 }
 
-/* TOTAL CHARGES STYLING - UNCHANGED */
+/* TOTAL CHARGES STYLING */
 .data-block-item.total-charges {
     background-color: var(--color-total) !important; 
     border-top: 2px solid var(--color-primary);
@@ -365,24 +299,16 @@ select:disabled {
     white-space: normal; 
 }
 
-/* Critical Value Highlight - UNCHANGED */
+/* Critical Value Highlight */
 .item-value.critical-value {
     color: var(--color-danger); 
     font-weight: 700;
     background-color: #fff3cd; 
     padding: 2px 5px;
     border-radius: 3px;
-<<<<<<< HEAD
-=======
 }
 
-/* CUSTOMER & LOAN DETAILS (BLOCK 1) - UNCHANGED */
-.data-block.horizontal-grid {
-    grid-column: 1 / -1; 
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
-}
-
-/* CUSTOMER & LOAN DETAILS (BLOCK 1) - UNCHANGED */
+/* CUSTOMER & LOAN DETAILS (BLOCK 1) - Horizontal Grid */
 .data-block.horizontal-grid .data-block-content {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); 
@@ -415,7 +341,7 @@ select:disabled {
 }
 
 
-/* Legal Action Remarks (Block 2) - UNCHANGED */
+/* Legal Action Remarks (Block 2) */
 .data-block.legal-remarks .item-label {
     font-weight: 700; 
     color: #3a5c7f; 
@@ -426,7 +352,7 @@ select:disabled {
 }
 
 
-/* WRITE FORM LAYOUT - UNCHANGED */
+/* WRITE FORM LAYOUT */
 #dynamic-field {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -438,8 +364,4 @@ select:disabled {
     display: block;
     font-weight: 500;
     margin-bottom: 5px;
-<<<<<<< HEAD
 }
-=======
-}
->>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
