@@ -67,11 +67,37 @@ const CRITICAL_FIELDS = [
     "CASENOSec9" 
 ];
 
-// CHARGE FIELDS for Summation
+// --- UPDATED CHARGE FIELDS for Summation (Used for the Snapshot Box Total and currency formatting) ---
 const CHARGE_FIELDS = [
-    "Demand Notice Expense",
-    "Sec 09 Expense",
-    "Sec.138 Expense"
+    "Demand Notice Expense", // Retain this original field
+    
+    // Section 138 Fee & Charges
+    "Cheque Return Charges",
+    "POA for Filing Sec 138",
+    "Initial Fee for Sec.138",
+    "GST of Sec.138 Initial Fee",
+    "TDS of Sec.138 Initial Fee",
+    "Sec.138 Notice Expense",
+    "Warrant Steps of Sec 138",
+    "Final fee for Sec 138",
+    "GST of Final fee for Sec 138",
+    "TDS of Final fee for Sec 138",
+
+    // Section 09 Fee & Charges
+    "Taken Expense for Sec 09 filing",
+    "POA for Filing Sec 09",
+    "Initial Fee for Sec 09",
+    "GST of Sec 09, Initial Fee",
+    "TDS of Initial Fee",
+    "Fresh Notice Expense for Filing Sec 09",
+    "Attachment Batta For Sec 09",
+    "Attachment Petition",
+    "Property Attachment Expense",
+    "Sec 09 Court fee & E-Filing Expense",
+    "Final Fee For Sec 09",
+    "GST of Final Fee For Sec 09",
+    "TDS of Final Fee For Sec 09",
+    "Attachment Lifting Expense"
 ];
 
 
@@ -106,7 +132,7 @@ const CLIENT_SIDE_AUTH_KEY = "123";
 let ALL_RECORDS = []; 
 
 
-// --- DISPLAY CONFIGURATION ---
+// --- UPDATED DISPLAY CONFIGURATION ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -155,7 +181,7 @@ const DISPLAY_BLOCKS = [
         }
     },
     {
-        title: "4) Section 9",
+        title: "4) Section 9 Status",
         fields: {
             "Sec9FilingDate": "Sec-09 Filing Date",
             "Sec9FilingAmt": "Sec-09 Filing Amount",
@@ -164,18 +190,46 @@ const DISPLAY_BLOCKS = [
             "AttachmentEffDate": "Attachment eff Date",
         }
     },
+    // --- NEW BLOCK 5 (Index 4) ---
     {
-        title: "5) Charges",
+        title: "5) Section 138 Fee & Charges",
         fields: {
-            "Demand Notice Expense": "Demand Notice Expense",
-            "Sec 09 Expense": "Sec-09 Expense",
-            "Sec.138 Exprense": "Sec-138 Expense", // FIXED: Was "Sec.138 Exprense"
+            "Cheque Return Charges": "Cheque Return Charges",
+            "POA for Filing Sec 138": "POA for Filing Sec 138",
+            "Initial Fee for Sec.138": "Initial Fee for Sec.138",
+            "GST of Sec.138 Initial Fee": "GST of Sec.138 Initial Fee",
+            "TDS of Sec.138 Initial Fee": "TDS of Sec.138 Initial Fee",
+            "Sec.138 Notice Expense": "Sec.138 Notice Expense",
+            "Warrant Steps of Sec 138": "Warrant Steps of Sec 138",
+            "Final fee for Sec 138": "Final fee for Sec 138",
+            "GST of Final fee for Sec 138": "GST of Final fee for Sec 138",
+            "TDS of Final fee for Sec 138": "TDS of Final fee for Sec 138",
+        }
+    },
+    // --- NEW BLOCK 6 (Index 5) ---
+    {
+        title: "6) Section 09 Fee & Charges",
+        fields: {
+            "Taken Expense for Sec 09 filing": "Taken Expense for Sec 09 filing",
+            "POA for Filing Sec 09": "POA for Filing Sec 09",
+            "Initial Fee for Sec 09": "Initial Fee for Sec 09",
+            "GST of Sec 09, Initial Fee": "GST of Sec 09, Initial Fee",
+            "TDS of Initial Fee": "TDS of Initial Fee",
+            "Fresh Notice Expense for Filing Sec 09": "Fresh Notice Expense for Filing Sec 09",
+            "Attachment Batta For Sec 09": "Attachment Batta For Sec 09",
+            "Attachment Petition": "Attachment Petition",
+            "Property Attachment Expense": "Property Attachment Expense",
+            "Sec 09 Court fee & E-Filing Expense": "Sec 09 Court fee & E-Filing Expense",
+            "Final Fee For Sec 09": "Final Fee For Sec 09",
+            "GST of Final Fee For Sec 09": "GST of Final Fee For Sec 09",
+            "TDS of Final Fee For Sec 09": "TDS of Final Fee For Sec 09",
+            "Attachment Lifting Expense": "Attachment Lifting Expense",
         }
     }
 ];
 
 
-// --- DOM ELEMENTS ---
+// --- DOM ELEMENTS (Unchanged) ---
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -199,7 +253,7 @@ const HEADER_INPUT = document.getElementById('header_name');
 const DATA_INPUT = document.getElementById('data_value');
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION
+// 1. INITIAL FETCH AND DROPDOWN POPULATION (Unchanged)
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
@@ -249,7 +303,7 @@ function populateBranchDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC
+// 2. CASCADING LOGIC (Unchanged)
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
@@ -285,7 +339,7 @@ function populateLoanDropdown() {
 }
 
 
-// 3. DISPLAY LOGIC (Search Button Click)
+// 3. DISPLAY LOGIC (Search Button Click) (Unchanged)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
 
 function displayLoan() {
@@ -321,7 +375,7 @@ function displayLoan() {
 }
 
 
-// Function to format and render the snapshot box
+// Function to format and render the snapshot box (Unchanged)
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = ''; // Clear previous data
 
@@ -333,7 +387,7 @@ function renderSnapshot(record) {
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Calculate Total Charges (using the existing helper)
+    // Calculate Total Charges (using the updated helper)
     const rawTotalCharges = calculateTotalCharges(record);
     const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -363,7 +417,7 @@ function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-    // Create the wrapper for blocks 2, 4, and 5 (the two-column grid)
+    // Create the wrapper for blocks 2, 4, 5, 6 (the two-column grid)
     const detailGridWrapper = document.createElement('div');
     detailGridWrapper.id = 'detail-content-grid'; 
 
@@ -374,11 +428,11 @@ function renderBlocks(record) {
         let parentContainer;
 
         if (index === 0 || index === 2) { 
-            // Block 1 (Customer Details) and Block 3 (Cheque Status) are full-width horizontal grids
+            // Block 1 (index 0) and Block 3 (index 2) are full-width horizontal grids
             block.classList.add('horizontal-grid');
             parentContainer = DATA_BLOCKS_CONTAINER; 
         } else {
-            // Blocks 2, 4, 5 go into the detailGridWrapper (75%/25% two-column layout)
+            // Blocks 2, 4, 5, 6 (indices 1, 3, 4, 5) go into the detailGridWrapper
             block.classList.add(`block-${index + 1}`); 
 
             if (index === 1) { // Block 2 (Legal Remarks)
@@ -401,6 +455,27 @@ function renderBlocks(record) {
             if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
                 value = formatDate(value);
             }
+
+            // --- CURRENCY FORMATTING LOGIC FOR CHARGE FIELDS ---
+            if (CHARGE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
+                const parseNumber = (val) => {
+                    if (typeof val === 'string') {
+                        // Remove commas and currency symbols before parsing
+                        val = val.replace(/[$,]/g, '').trim();
+                    }
+                    const number = parseFloat(val);
+                    // If it's a valid number, format it as currency, otherwise return the original string
+                    return isNaN(number) ? val : number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+                };
+                
+                const formattedValue = parseNumber(value);
+                
+                // If the value was successfully converted to a currency string
+                if (typeof formattedValue === 'string' && formattedValue.startsWith('₹') || (formattedValue !== value && !isNaN(parseFloat(String(formattedValue).replace(/[$,]/g, '').trim())))) {
+                    value = formattedValue;
+                }
+            }
+            // --- END CURRENCY FORMATTING LOGIC ---
             
             const item = document.createElement('div');
             item.className = 'data-block-item';
@@ -423,26 +498,8 @@ function renderBlocks(record) {
             contentWrapper.appendChild(item);
         });
 
-        // Calculate and append Total Charges for Block 5
-        if (index === 4) { // Block 5: Charges
-            const total = calculateTotalCharges(record);
-            const totalItem = document.createElement('div');
-            totalItem.className = 'data-block-item total-charges'; 
-
-            const label = document.createElement('span');
-            label.className = 'item-label';
-            label.textContent = `TOTAL CHARGES:`;
-
-            const dataValue = document.createElement('span');
-            dataValue.className = 'item-value critical-value'; 
-            
-            // Format to currency with two decimal places
-            dataValue.textContent = total.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-            totalItem.appendChild(label);
-            totalItem.appendChild(dataValue);
-            contentWrapper.appendChild(totalItem);
-        }
+        // NOTE: The old logic for displaying the 'Total Charges' at the bottom of the previous 5th block is REMOVED.
+        // The total is correctly displayed in the 'Snapshot Box' now using the comprehensive CHARGE_FIELDS list.
 
         block.appendChild(contentWrapper);
         
@@ -457,7 +514,7 @@ function renderBlocks(record) {
 }
 
 
-// 4. UI Toggling
+// 4. UI Toggling (Unchanged)
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
@@ -474,7 +531,7 @@ function showInputForm() {
 }
 
 
-// 5. WRITE OPERATION
+// 5. WRITE OPERATION (Unchanged)
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
