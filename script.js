@@ -1,4 +1,4 @@
-// Helper function to format date strings from Google Sheets to dd/mm/yyyy
+// Helper function to format date strings from Google Sheets to dd/mm/yyyy// Helper function to format date strings from Google Sheets to dd/mm/yyyy
 function formatDate(dateValue) {
     if (!dateValue || dateValue === 'N/A' || String(dateValue).startsWith('18')) {
         return dateValue;
@@ -55,9 +55,46 @@ const DATE_FIELDS = [
     "CQ DATE/PRESENTATION DATE", 
     "CQ RETURN DATE", 
     "HANDED OVER DATE", 
-    "Sec9FilingDate",       // Assuming you stuck with the clean names
-    "AttachmentEffDate"     // Assuming you stuck with the clean names
+    "Sec9FilingDate",
+    "AttachmentEffDate"
 ];
+
+// CRITICAL FIELDS for Highlighting
+const CRITICAL_FIELDS = [
+    "Arrear Amount", 
+    "Loan Balance",
+    "CASE NO", 
+    "CASENOSec9" 
+];
+
+// CHARGE FIELDS for Summation
+const CHARGE_FIELDS = [
+    "Demand Notice Expense",
+    "Sec 09 Expense",
+    "Sec.138 Expense"
+];
+
+
+// Helper function to safely parse and sum charge fields
+function calculateTotalCharges(record) {
+    let total = 0;
+    
+    const parseNumber = (value) => {
+        if (typeof value === 'string') {
+            // Remove commas and currency symbols
+            value = value.replace(/[$,]/g, '').trim();
+        }
+        const number = parseFloat(value);
+        return isNaN(number) ? 0 : number;
+    };
+
+    CHARGE_FIELDS.forEach(field => {
+        const value = record[field];
+        total += parseNumber(value);
+    });
+
+    return total;
+}
 
 
 // API URL now points to the Netlify Function proxy
@@ -69,7 +106,7 @@ const CLIENT_SIDE_AUTH_KEY = "123";
 let ALL_RECORDS = []; 
 
 
-// --- DISPLAY CONFIGURATION (Use the cleanest headers you settled on) ---
+// --- DISPLAY CONFIGURATION ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -108,13 +145,13 @@ const DISPLAY_BLOCKS = [
             "CQ RETURN DATE": "Cheque return Date",
             "AMOUNT": "AMOUNT",
             "B/G": "Borrower / Guarantor",
-            "BANK": "BANK",
-            "REMARKS": "REMARKS",
-            "ADVOCATE": "ADVOCATE", 
-            "HANDED OVER DATE": "HANDED OVER DATE",
+            "BANK": "Bank",
+            "REMARKS": "Remarks",
+            "ADVOCATE": "Advocate", 
+            "HANDED OVER DATE": "Handed Over Date",
             "Notice Remarks": "Notice Remarks",
-            "CASE FILED": "CASE FILED",
-            "CASE NO": "CASE NO", 
+            "CASE FILED": "Case Filed",
+            "CASE NO": "Case No", 
         }
     },
     {
@@ -125,7 +162,7 @@ const DISPLAY_BLOCKS = [
             "Sec/9 Filing Date": "Sec-09 Filing Date",
             "Sec/9 Filing Amt": "Sec-09 Filing Amount",
             "Sec/9 Advocate": "Advocate", 
-            "Sec/9 Case No": "CASE NO",   
+            "Sec/9 Case No": "Case No",   
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -157,18 +194,19 @@ const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
+// NEW SNAPSHOT BOX ELEMENT
+const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION
+// 1. INITIAL FETCH AND DROPDOWN POPULATION - UNCHANGED
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
     LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns...';
     try {
-        // Fetch all data (the new Apps Script will be simpler and return all data)
         const response = await fetch(API_URL, {
             method: 'GET',
             mode: 'cors' 
@@ -179,7 +217,7 @@ async function initialLoad() {
         if (result.status === 'success' && result.data && result.data.length > 0) {
             ALL_RECORDS = result.data;
             populateBranchDropdown(ALL_RECORDS);
-            LOADING_STATUS.textContent = 'Ready. Please select a Branch.';
+            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No.';
         } else {
             LOADING_STATUS.textContent = '❌ Error: Could not load data from the server.';
             BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
@@ -202,7 +240,6 @@ function populateBranchDropdown(records) {
 
     BRANCH_SELECT.innerHTML = '<option value="" selected disabled>-- Select Branch --</option>';
     
-    // Sort and add options
     [...branches].sort().forEach(branch => {
         const option = document.createElement('option');
         option.value = branch;
@@ -214,17 +251,16 @@ function populateBranchDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC
+// 2. CASCADING LOGIC - UNCHANGED
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
-    // Enable search button only when a valid loan is selected
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
+    LOADING_STATUS.textContent = 'Click "Display Loan Data"';
 });
 
 function populateLoanDropdown() {
     const selectedBranch = BRANCH_SELECT.value;
     
-    // Reset Loan Select
     LOAN_SELECT.innerHTML = '<option value="" selected disabled>-- Select Loan No --</option>';
     LOAN_SELECT.disabled = true;
     SEARCH_BUTTON.disabled = true;
@@ -237,7 +273,6 @@ function populateLoanDropdown() {
         .filter(record => String(record["Loan Branch"]).trim() === selectedBranch)
         .map(record => String(record["Loan No"]).trim());
 
-    // Use Set to ensure unique loan numbers (though ideally they should be unique)
     const uniqueLoans = new Set(loans);
     
     [...uniqueLoans].sort().forEach(loanNo => {
@@ -248,7 +283,7 @@ function populateLoanDropdown() {
     });
 
     LOAN_SELECT.disabled = false;
-    LOADING_STATUS.textContent = `Select a Loan No from Branch: ${selectedBranch}`;
+    LOADING_STATUS.textContent = `Loan Nos loaded. Select one.`;
 }
 
 
@@ -266,7 +301,6 @@ function displayLoan() {
 
     LOADING_STATUS.textContent = `Displaying data for Loan No: ${loanNo}...`;
 
-    // Find the record in the locally stored ALL_RECORDS
     const record = ALL_RECORDS.find(r => 
         String(r["Loan Branch"]).trim() === selectedBranch && 
         String(r["Loan No"]).trim() === loanNo
@@ -276,10 +310,12 @@ function displayLoan() {
     NOT_FOUND_MESSAGE.style.display = 'none';
 
     if (record) {
+        renderSnapshot(record); // <--- NEW SNAPSHOT CALL
         renderBlocks(record);
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
+        SNAPSHOT_BOX.innerHTML = ''; // Clear snapshot on error
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
@@ -287,14 +323,54 @@ function displayLoan() {
 }
 
 
+// NEW: Function to format and render the snapshot box
+function renderSnapshot(record) {
+    SNAPSHOT_BOX.innerHTML = ''; // Clear previous data
+
+    // Helper to get formatted currency string from a sheet header
+    const getFormattedCurrency = (sheetHeader) => {
+        let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
+        const number = parseFloat(String(value).replace(/[$,]/g, '').trim());
+        if (isNaN(number)) return 'N/A';
+        return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+    };
+
+    // Calculate Total Charges (using the existing helper)
+    const rawTotalCharges = calculateTotalCharges(record);
+    const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+    const snapshotItems = [
+        { header: "Loan Amount", label: "Loan Amount", value: getFormattedCurrency("Loan Amount"), class: 'success' },
+        { header: "Loan Balance", label: "Loan Balance", value: getFormattedCurrency("Loan Balance"), class: 'primary' },
+        { header: "Arrear Amount", label: "Arrear Amount", value: getFormattedCurrency("Arrear Amount"), class: 'danger' },
+        { header: "TOTAL CHARGES", label: "TOTAL CHARGES", value: formattedTotalCharges, class: 'total-color' },
+    ];
+
+    let snapshotHTML = '';
+    snapshotItems.forEach(item => {
+        snapshotHTML += `
+            <div class="snapshot-item ${item.class}">
+                <span class="label">${item.label}</span>
+                <span class="value">${item.value}</span>
+            </div>
+        `;
+    });
+
+    SNAPSHOT_BOX.innerHTML = snapshotHTML;
+}
+
+// RENDER BLOCKS FUNCTION - UNCHANGED
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
+<<<<<<< HEAD
     // Create the main content grid wrapper for blocks 2-5
     const detailGridWrapper = document.createElement('div');
     detailGridWrapper.id = 'detail-content-grid'; // New ID for CSS grid layout
 
+=======
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         block.className = 'data-block';
@@ -302,6 +378,7 @@ function renderBlocks(record) {
         if (index === 0) {
             // Block 1: Always full width, handles its own horizontal grid
             block.classList.add('horizontal-grid');
+<<<<<<< HEAD
             DATA_BLOCKS_CONTAINER.appendChild(block); // Append Block 1 directly to the main container
         } else {
             // Blocks 2 through 5 will go into the new detailGridWrapper
@@ -310,6 +387,25 @@ function renderBlocks(record) {
 
             if (index === 1) {
                 block.classList.add('legal-remarks');
+=======
+        } else if (index === 1) {
+            block.classList.add('legal-remarks');
+        }
+        
+        const title = document.createElement('h3');
+        title.textContent = blockConfig.title;
+        block.appendChild(title);
+        
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'data-block-content';
+        
+        Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
+            let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
+            
+            // Apply date formatting
+            if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
+                value = formatDate(value);
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
             }
             
             // ... (The rest of the rendering logic for the block content is unchanged)
@@ -321,6 +417,7 @@ function renderBlocks(record) {
             const contentWrapper = document.createElement('div');
             contentWrapper.className = 'data-block-content';
             
+<<<<<<< HEAD
             Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
                 let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
                 
@@ -374,6 +471,41 @@ function renderBlocks(record) {
             block.appendChild(contentWrapper);
             detailGridWrapper.appendChild(block); // Append blocks 2-5 to the wrapper
         }
+=======
+            // Apply CRITICAL HIGHLIGHT
+            if (CRITICAL_FIELDS.includes(sheetHeader)) {
+                dataValue.classList.add('critical-value');
+            }
+            
+            item.appendChild(label);
+            item.appendChild(dataValue);
+            contentWrapper.appendChild(item);
+        });
+
+        // Calculate and append Total Charges for Block 5
+        if (index === 4) { // Block 5: Charges
+            const total = calculateTotalCharges(record);
+            const totalItem = document.createElement('div');
+            totalItem.className = 'data-block-item total-charges'; 
+
+            const label = document.createElement('span');
+            label.className = 'item-label';
+            label.textContent = `TOTAL CHARGES:`;
+
+            const dataValue = document.createElement('span');
+            dataValue.className = 'item-value critical-value'; 
+            
+            // Format to currency with two decimal places
+            dataValue.textContent = total.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+            totalItem.appendChild(label);
+            totalItem.appendChild(dataValue);
+            contentWrapper.appendChild(totalItem);
+        }
+
+        block.appendChild(contentWrapper);
+        DATA_BLOCKS_CONTAINER.appendChild(block);
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
     });
 
     // Append the new wrapper containing blocks 2-5 after Block 1 is done
@@ -381,14 +513,14 @@ function renderBlocks(record) {
 }
 
 
-// 4. UI Toggling (Unchanged)
+// 4. UI Toggling - UNCHANGED
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
     
     if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'block';
+        FORM.style.display = 'grid'; 
         AUTH_KEY_INPUT.style.display = 'none';
-        AUTH_BUTTON.style.display = 'none';
+        document.getElementById('enable-input-button').style.display = 'none';
         AUTH_LABEL.textContent = 'Write Access Granted.';
         alert('Write access enabled! Please fill out the form.');
     } else {
@@ -398,7 +530,7 @@ function showInputForm() {
 }
 
 
-// 5. WRITE OPERATION (Single Dynamic Entry) (Unchanged)
+// 5. WRITE OPERATION - UNCHANGED
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
@@ -429,9 +561,8 @@ FORM.addEventListener('submit', async function(event) {
         const result = await response.json();
 
         if (result.status === 'success') {
-            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}`;
+            MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}. Reloading data...`;
             FORM.reset(); 
-            // NOTE: For data consistency, you should reload the ALL_RECORDS cache here.
             initialLoad(); 
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 

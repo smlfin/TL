@@ -134,8 +134,69 @@ select:disabled {
 }
 
 
+<<<<<<< HEAD
 /* SNAPSHOT BOX STYLING - UNCHANGED */
 #loan-snapshot-box {
+=======
+/* ------------------------------------------------------------- */
+/* SNAPSHOT BOX STYLING (NEW)                                    */
+/* ------------------------------------------------------------- */
+
+#loan-snapshot-box {
+    display: grid;
+    /* 4 equally sized columns */
+    grid-template-columns: repeat(4, 1fr); 
+    gap: 15px;
+    margin-bottom: 30px; /* Space before the data blocks */
+    padding: 15px;
+    background-color: var(--color-primary); /* Strong background */
+    border-radius: 8px;
+    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.15);
+}
+
+.snapshot-item {
+    text-align: center;
+    padding: 10px;
+    background-color: var(--color-surface); 
+    border-radius: 4px;
+    /* Adding a subtle border for depth */
+    border: 1px solid #e9ecef; 
+}
+
+.snapshot-item .label {
+    display: block;
+    font-size: 0.8em;
+    color: var(--color-secondary);
+    margin-bottom: 4px;
+    font-weight: 500;
+}
+
+.snapshot-item .value {
+    display: block;
+    font-size: 1.3em;
+    font-weight: 700;
+}
+
+/* Color coding for quick distinction */
+.snapshot-item.danger .value {
+    color: var(--color-danger); 
+}
+.snapshot-item.primary .value {
+    color: var(--color-primary); 
+}
+.snapshot-item.success .value {
+    color: var(--color-success); 
+}
+.snapshot-item.total-color .value {
+    /* Use the primary color again for total, or a deep grey */
+    color: #343a40; 
+    font-size: 1.4em;
+}
+
+
+/* DATA DISPLAY STYLING - UNCHANGED EXCEPT FOR ITEM-VALUE */
+#data-blocks {
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
     display: grid;
     grid-template-columns: repeat(4, 1fr); 
     gap: 15px;
@@ -224,6 +285,7 @@ select:disabled {
     box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
     position: relative;
     overflow: hidden;
+<<<<<<< HEAD
     margin-bottom: 20px; /* Add vertical space between blocks in the same column */
 }
 
@@ -240,6 +302,10 @@ select:disabled {
 }
 
 
+=======
+}
+
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
 /* Sticky Header - UNCHANGED */
 .data-block h3 {
     margin-top: -15px; 
@@ -306,6 +372,14 @@ select:disabled {
     background-color: #fff3cd; 
     padding: 2px 5px;
     border-radius: 3px;
+<<<<<<< HEAD
+=======
+}
+
+/* CUSTOMER & LOAN DETAILS (BLOCK 1) - UNCHANGED */
+.data-block.horizontal-grid {
+    grid-column: 1 / -1; 
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
 }
 
 /* CUSTOMER & LOAN DETAILS (BLOCK 1) - UNCHANGED */
@@ -364,4 +438,8 @@ select:disabled {
     display: block;
     font-weight: 500;
     margin-bottom: 5px;
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 4180f5a04934db17c79f4ab197b569f858dff9d7
