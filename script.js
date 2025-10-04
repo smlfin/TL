@@ -68,6 +68,20 @@ const CRITICAL_FIELDS = [
 ];
 
 
+// --- ACCORDION CONFIGURATION ---
+const ACCORDION_BLOCKS = [1, 2, 3, 4];
+const BASIC_FIELDS = {
+    // Block 1: Customer & Loan Details (Horizontal Grid)
+    1: ["Loan No", "Customer Name", "Arrear Amount", "Loan Balance"],
+    // Block 2: Legal Action Recommendation & Remarks (Vertical List)
+    2: ["Demand Notice Sent Date", "Legal Remarks"],
+    // Block 3: Cheque return status (Horizontal Grid)
+    3: ["CHEQ. NO.", "CQ RETURN DATE", "CASE NO"],
+    // Block 4: Section 9 Status (Vertical List)
+    4: ["Sec/9 Filing Date", "Sec/9 Case No"],
+};
+
+
 // Helper function to safely parse a value
 const parseNumber = (value) => {
     if (typeof value === 'string') {
@@ -77,11 +91,11 @@ const parseNumber = (value) => {
     return isNaN(number) ? 0 : number;
 };
 
-// New function to calculate subtotal with defined signs (for Advocate Fee Net)
+// Function to calculate subtotal with defined signs (for Advocate Fee Net)
 function calculateNetTotal(record, fields) {
     let total = 0;
     
-    // The calculation logic is implemented directly here based on the field names and the sign
+    // The calculation logic: (Initial Fee + GST) - TDS
     fields.forEach(field => {
         let sign = 1; // Default is addition
 
@@ -101,7 +115,7 @@ function calculateNetTotal(record, fields) {
 
 // 5) Section 138 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_138 = {
-    // Advocate Fee Net Group (The six line items that are filtered when toggle is ON)
+    // Advocate Fee Net Group
     "AdvocateFeeFields": [
         "Initial Fee for Sec.138",
         "GST of Sec.138 Initial Fee",
@@ -121,7 +135,7 @@ const CHARGE_DEFINITIONS_138 = {
 
 // 6) Section 09 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_09 = {
-    // Advocate Fee Net Group (The six line items that are filtered when toggle is ON)
+    // Advocate Fee Net Group
     "AdvocateFeeFields": [
         "Initial Fee for Sec 09",
         "GST of Sec 09 Initial Fee",
@@ -142,7 +156,6 @@ const CHARGE_DEFINITIONS_09 = {
         "Attachment Lifting Expense",
     ]
 };
-
 
 // All Charge Fields for Snapshot Box Total (Must include Demand Notice Expense)
 const CHARGE_FIELDS_FOR_SNAPSHOT = [
@@ -169,7 +182,7 @@ let ALL_RECORDS = [];
 window.CURRENT_LOAN_RECORD = null;
 
 
-// --- DISPLAY CONFIGURATION ---
+// --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -272,28 +285,22 @@ const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
 const AUTH_BUTTON = document.getElementById('enable-input-button'); 
 const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
-
-// Dropdown Elements
 const BRANCH_SELECT = document.getElementById('branch-select');
 const LOAN_SELECT = document.getElementById('loan-select');
 const SEARCH_BUTTON = document.getElementById('search-button');
-
 const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
 const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
-
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
-
-// --- TOGGLE ELEMENTS ---
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION
+// 1. INITIAL FETCH AND DROPDOWN POPULATION (Unchanged)
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
@@ -343,7 +350,7 @@ function populateBranchDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC 
+// 2. CASCADING LOGIC (Unchanged)
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
@@ -379,7 +386,7 @@ function populateLoanDropdown() {
 }
 
 
-// 3. DISPLAY LOGIC (Search Button Click)
+// 3. DISPLAY LOGIC (Search Button Click) - Now calls renderFilteredBlocks
 SEARCH_BUTTON.addEventListener('click', displayLoan);
 
 function displayLoan() {
@@ -411,7 +418,10 @@ function displayLoan() {
         // Show the toggle container
         ADVOCATE_FEE_CONTROLS.style.display = 'flex'; 
         
-        LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
+        // Add accordion listeners after blocks are rendered
+        addAccordionListeners();
+        
+        LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
         SNAPSHOT_BOX.innerHTML = ''; 
@@ -424,7 +434,7 @@ function displayLoan() {
 }
 
 
-// Function to format and render the snapshot box
+// Function to format and render the snapshot box (Unchanged)
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = ''; 
 
@@ -461,7 +471,67 @@ function renderSnapshot(record) {
 }
 
 
-// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
+// Helper to render an individual data item
+function renderDataItem(sheetHeader, displayName, value) {
+    const item = document.createElement('div');
+    item.className = 'data-block-item';
+    
+    const label = document.createElement('span');
+    label.className = 'item-label';
+    label.textContent = `${displayName}:`;
+    
+    const dataValue = document.createElement('span');
+    dataValue.className = 'item-value';
+    dataValue.textContent = value;
+    
+    if (CRITICAL_FIELDS.includes(sheetHeader)) {
+        dataValue.classList.add('critical-value');
+    }
+    
+    item.appendChild(label);
+    item.appendChild(dataValue);
+    return item;
+}
+
+// Helper to process and format value
+function processValue(record, sheetHeader) {
+    let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
+    
+    // Apply date formatting
+    if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
+        value = formatDate(value);
+    }
+
+    // Apply currency formatting
+    if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
+        const number = parseNumber(value);
+        value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+    }
+    return value;
+}
+
+// Helper to create a subtotal row DOM element (Unchanged)
+function createSubtotalRow(label, value, className) {
+    const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+    const subtotalItem = document.createElement('div');
+    subtotalItem.className = `data-block-item ${className}`;
+
+    const totalLabelSpan = document.createElement('span');
+    totalLabelSpan.className = 'item-label';
+    totalLabelSpan.textContent = label;
+
+    const totalValueSpan = document.createElement('span');
+    totalValueSpan.className = 'item-value';
+    totalValueSpan.textContent = formattedValue;
+
+    subtotalItem.appendChild(totalLabelSpan);
+    subtotalItem.appendChild(totalValueSpan);
+    return subtotalItem;
+}
+
+
+// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION (Handles Accordion and Subtotals) ---
 function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
@@ -471,76 +541,105 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         const blockNumber = index + 1;
-        block.classList.add('data-block', `block-${blockNumber}`);
+        block.id = `block-${blockNumber}`;
+        block.classList.add('data-block');
 
         const isChargeBlock = blockNumber === 5 || blockNumber === 6;
-
+        const isAccordionBlock = ACCORDION_BLOCKS.includes(blockNumber);
+        
+        // Add layout classes
         if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) { 
             block.classList.add('horizontal-grid');
         } else if (blockNumber === 2 || blockNumber === 4) { 
              block.classList.add('vertical-list');
         }
+
+        // --- Block Header (Accordion Header) ---
+        const header = document.createElement('div');
+        header.classList.add('accordion-header');
         
+        if (isAccordionBlock) {
+            // Blocks 1, 2, 3, 4 are collapsed by default
+            header.classList.add('collapsed'); 
+        } else {
+            // Blocks 5, 6 are always expanded
+            header.classList.add('expanded');
+        }
+
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
-        block.appendChild(title);
+        header.appendChild(title);
         
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'data-block-content';
-        
-        let fieldsToRender = Object.entries(blockConfig.fields);
+        const icon = document.createElement('span');
+        icon.classList.add('accordion-icon');
+        icon.textContent = '▶'; // Right arrow icon
+        header.appendChild(icon);
+        block.appendChild(header);
 
-        // --- FILTERING AND SUBTOTAL LOGIC FOR BLOCKS 5 & 6 ---
+        
+        let allFields = Object.entries(blockConfig.fields);
+        let fieldsToRender = allFields; // Fields that go into the expandable content
+        let basicFieldsToRender = [];  // Fields that go into the always visible content
+        
+        // --- Split fields for Accordion Blocks (1, 2, 3, 4) ---
+        if (isAccordionBlock) {
+            const basicFieldsSet = new Set(BASIC_FIELDS[blockNumber] || []);
+            
+            // Separate basic fields from the rest
+            basicFieldsToRender = allFields.filter(([sheetHeader, _]) => basicFieldsSet.has(sheetHeader));
+            fieldsToRender = allFields.filter(([sheetHeader, _]) => !basicFieldsSet.has(sheetHeader));
+            
+            // 1a. Render Basic Info Wrapper (Always Visible)
+            const basicInfoWrapper = document.createElement('div');
+            basicInfoWrapper.className = 'basic-info-wrapper';
+            
+            basicFieldsToRender.forEach(([sheetHeader, displayName]) => {
+                const value = processValue(record, sheetHeader);
+                basicInfoWrapper.appendChild(renderDataItem(sheetHeader, displayName, value));
+            });
+            block.appendChild(basicInfoWrapper);
+        }
+
+        // --- Collapsible/Main Content Wrapper ---
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = 'accordion-content';
+        if (!isAccordionBlock) {
+            // Blocks 5 and 6 are always expanded
+            contentWrapper.classList.add('expanded');
+        }
+        
+        const innerContent = document.createElement('div');
+        innerContent.className = 'data-block-content';
+        
+        // --- Filtering and Rendering Logic for All Blocks (including Charge Blocks 5 & 6) ---
+        
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
             const allChargeFields = [...definitions.AdvocateFeeFields, ...definitions.OtherChargesFields];
-
+            
             if (isAdvocateFeeOnly) {
-                // TOGGLE ON: Show only Advocate Fee fields
-                fieldsToRender = fieldsToRender.filter(([sheetHeader, _]) => definitions.AdvocateFeeFields.includes(sheetHeader));
+                // TOGGLE ON: Filter to show only Advocate Fee fields
+                fieldsToRender = allChargeFields.filter(sheetHeader => definitions.AdvocateFeeFields.includes(sheetHeader));
             } else {
-                // TOGGLE OFF: Show all fields (fieldsToRender is already the full list)
+                // TOGGLE OFF: Use the full list of fields from the definitions (ensure order)
+                fieldsToRender = allChargeFields;
             }
+            
+            // For charge blocks, we need to iterate over the array of field names, not the full block config entries.
+            fieldsToRender.forEach(sheetHeader => {
+                const displayName = blockConfig.fields[sheetHeader];
+                const value = processValue(record, sheetHeader);
+                innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
+            });
+            
+        } else {
+            // Standard blocks (1, 2, 3, 4): render remaining fields
+            fieldsToRender.forEach(([sheetHeader, displayName]) => {
+                const value = processValue(record, sheetHeader);
+                innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
+            });
         }
         
-        // 1. Render individual items
-        fieldsToRender.forEach(([sheetHeader, displayName]) => {
-            
-            let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
-            
-            // Apply date formatting
-            if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-                value = formatDate(value);
-            }
-
-            // --- CURRENCY FORMATTING LOGIC ---
-            if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
-                const number = parseNumber(value);
-                value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-            }
-            // --- END CURRENCY FORMATTING LOGIC ---
-            
-            const item = document.createElement('div');
-            item.className = 'data-block-item';
-            
-            const label = document.createElement('span');
-            label.className = 'item-label';
-            label.textContent = `${displayName}:`;
-            
-            const dataValue = document.createElement('span');
-            dataValue.className = 'item-value';
-            dataValue.textContent = value;
-            
-            // Apply CRITICAL HIGHLIGHT
-            if (CRITICAL_FIELDS.includes(sheetHeader)) {
-                dataValue.classList.add('critical-value');
-            }
-            
-            item.appendChild(label);
-            item.appendChild(dataValue);
-            contentWrapper.appendChild(item);
-        });
-
         // 2. Append Subtotal Rows for Charge Blocks (5 & 6)
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
@@ -556,7 +655,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                     advFeeNetTotal, 
                     'subtotal-row total-color'
                 );
-                contentWrapper.appendChild(totalItem);
+                innerContent.appendChild(totalItem);
                 
             } else {
                 // TOGGLE OFF: Show all three required subtotal rows
@@ -567,7 +666,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                     advFeeNetTotal, 
                     'subtotal-row'
                 );
-                contentWrapper.appendChild(advFeeItem);
+                innerContent.appendChild(advFeeItem);
 
                 // Subtotal 2: Other Charges Net
                 const otherChargesItem = createSubtotalRow(
@@ -575,19 +674,20 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                     otherChargesNetTotal, 
                     'subtotal-row'
                 );
-                contentWrapper.appendChild(otherChargesItem);
+                innerContent.appendChild(otherChargesItem);
                 
                 // Subtotal 3: Sub Section Total
                 const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
                 const totalItem = createSubtotalRow(
                     `${sectionName} Sub Section Total`, 
                     subSectionTotal, 
-                    'subtotal-row total-color' // Use distinct class for final total
+                    'subtotal-row total-color'
                 );
-                contentWrapper.appendChild(totalItem);
+                innerContent.appendChild(totalItem);
             }
         }
-        
+
+        contentWrapper.appendChild(innerContent);
         block.appendChild(contentWrapper);
         blockElements[blockNumber] = block;
     });
@@ -610,30 +710,49 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     if (blockElements[5]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[5]);
     if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
 }
-
-// Helper to create a subtotal row DOM element
-function createSubtotalRow(label, value, className) {
-    const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-    const subtotalItem = document.createElement('div');
-    subtotalItem.className = `data-block-item ${className}`;
-
-    const totalLabelSpan = document.createElement('span');
-    totalLabelSpan.className = 'item-label';
-    totalLabelSpan.textContent = label;
-
-    const totalValueSpan = document.createElement('span');
-    totalValueSpan.className = 'item-value';
-    totalValueSpan.textContent = formattedValue;
-
-    subtotalItem.appendChild(totalLabelSpan);
-    subtotalItem.appendChild(totalValueSpan);
-    return subtotalItem;
-}
 // --- END MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 
 
-// --- TOGGLE EVENT LISTENER ---
+// --- NEW: ACCORDION EVENT LISTENER LOGIC ---
+function addAccordionListeners() {
+    // Remove old listeners (if any)
+    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
+        header.removeEventListener('click', toggleAccordion);
+    });
+
+    // Add new listeners
+    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
+        header.addEventListener('click', toggleAccordion);
+    });
+}
+
+function toggleAccordion() {
+    // 'this' is the header element
+    const content = this.nextElementSibling.nextElementSibling || this.nextElementSibling; // Get the content div
+    const icon = this.querySelector('.accordion-icon');
+    
+    if (content && content.classList.contains('accordion-content')) {
+        const isExpanded = content.classList.contains('expanded');
+        
+        if (isExpanded) {
+            // Collapse
+            content.classList.remove('expanded');
+            this.classList.remove('expanded');
+            this.classList.add('collapsed');
+            icon.textContent = '▶';
+        } else {
+            // Expand
+            content.classList.add('expanded');
+            this.classList.add('expanded');
+            this.classList.remove('collapsed');
+            icon.textContent = '▼';
+        }
+    }
+}
+// --- END ACCORDION EVENT LISTENER LOGIC ---
+
+
+// --- TOGGLE EVENT LISTENER (Unchanged) ---
 document.addEventListener('DOMContentLoaded', () => {
     if (ADVOCATE_FEE_TOGGLE) {
         ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
@@ -641,6 +760,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             if (window.CURRENT_LOAN_RECORD) {
                 renderFilteredBlocks(window.CURRENT_LOAN_RECORD, isChecked);
+                addAccordionListeners(); // Re-add listeners after re-render
                 LOADING_STATUS.textContent = isChecked ? 'Showing Advocate Fee related charges only.' : 'Showing all charges.';
             } else {
                 ADVOCATE_FEE_TOGGLE.checked = false; 
