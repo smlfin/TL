@@ -67,89 +67,96 @@ const CRITICAL_FIELDS = [
     "CASENOSec9" 
 ];
 
-// --- ADVOCATE FEE DEFINITIONS FOR FILTERING & SUBTOTALS ---
 
-// Fields that constitute the core Advocate Fee for Sec 138 (Block 5)
-const ADVOCATE_FEE_FIELDS_138 = [
-    "Initial Fee for Sec.138",
-    "GST of Sec.138 Initial Fee",
-    "TDS of Sec.138 Initial Fee",
-    "Final fee for Sec 138",
-    "GST of Final fee for Sec 138",
-    "TDS of Final fee for Sec 138",
-];
-
-// Fields that constitute the core Advocate Fee for Sec 09 (Block 6)
-const ADVOCATE_FEE_FIELDS_09 = [
-    "Initial Fee for Sec 09",
-    "GST of Sec 09 Initial Fee",
-    "TDS of Initial Fee",
-    "Final Fee For Sec 09",
-    "GST of Final Fee For Sec 09",
-    "TDS of Final Fee For Sec 09",
-];
-
-// Map all advocate fee fields for easy access in the rendering logic
-const ADVOCATE_FEE_FIELDS_MAP = {
-    5: ADVOCATE_FEE_FIELDS_138,
-    6: ADVOCATE_FEE_FIELDS_09,
+// Helper function to safely parse a value
+const parseNumber = (value) => {
+    if (typeof value === 'string') {
+        value = value.replace(/[$,]/g, '').trim();
+    }
+    const number = parseFloat(value);
+    return isNaN(number) ? 0 : number;
 };
 
-// All Charge Fields (Same as before, used for overall calculation and unfiltered view)
-const CHARGE_FIELDS = [
-    "Demand Notice Expense",
-    "Cheque Return Charges",
-    "POA for Filing Sec 138",
-    "Initial Fee for Sec.138",
-    "GST of Sec.138 Initial Fee",
-    "TDS of Sec.138 Initial Fee",
-    "Sec.138 Notice Expense",
-    "Warrant Steps of Sec 138",
-    "Final fee for Sec 138",
-    "GST of Final fee for Sec 138",
-    "TDS of Final fee for Sec 138",
-    "Taken Expense for Sec 09 filing",
-    "POA for Filing Sec 09",
-    "Initial Fee for Sec 09",
-    "GST of Sec 09 Initial Fee",
-    "TDS of Initial Fee",
-    "Fresh Notice Expense for Filing Sec 09",
-    "Attachment Batta For Sec 09",
-    "Attachment Petition",
-    "Property Attachment Expense",
-    "Sec 09 Court fee & E-Filing Expense",
-    "Final Fee For Sec 09",
-    "GST of Final Fee For Sec 09",
-    "TDS of Final Fee For Sec 09",
-    "Attachment Lifting Expense"
-];
-
-
-// Helper function to safely parse and sum a list of charge fields
-function calculateSubtotal(record, fields) {
+// New function to calculate subtotal with defined signs (for Advocate Fee Net)
+function calculateNetTotal(record, fields) {
     let total = 0;
     
-    const parseNumber = (value) => {
-        if (typeof value === 'string') {
-            // Remove commas and currency symbols
-            value = value.replace(/[$,]/g, '').trim();
-        }
-        const number = parseFloat(value);
-        return isNaN(number) ? 0 : number;
-    };
-
+    // The calculation logic is implemented directly here based on the field names and the sign
     fields.forEach(field => {
+        let sign = 1; // Default is addition
+
+        // Check for TDS (Tax Deducted at Source) fields which should be subtracted
+        if (field.includes("TDS")) {
+            sign = -1;
+        }
+        
         const value = record[field];
-        total += parseNumber(value);
+        total += parseNumber(value) * sign;
     });
 
     return total;
 }
 
+// --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
+
+// 5) Section 138 Fee & Charges Definitions
+const CHARGE_DEFINITIONS_138 = {
+    // Advocate Fee Net Group (The six line items that are filtered when toggle is ON)
+    "AdvocateFeeFields": [
+        "Initial Fee for Sec.138",
+        "GST of Sec.138 Initial Fee",
+        "TDS of Sec.138 Initial Fee",
+        "Final fee for Sec 138",
+        "GST of Final fee for Sec 138",
+        "TDS of Final fee for Sec 138",
+    ],
+    // Other Charges Net Group
+    "OtherChargesFields": [
+        "Cheque Return Charges",
+        "POA for Filing Sec 138",
+        "Sec.138 Notice Expense",
+        "Warrant Steps of Sec 138",
+    ]
+};
+
+// 6) Section 09 Fee & Charges Definitions
+const CHARGE_DEFINITIONS_09 = {
+    // Advocate Fee Net Group (The six line items that are filtered when toggle is ON)
+    "AdvocateFeeFields": [
+        "Initial Fee for Sec 09",
+        "GST of Sec 09 Initial Fee",
+        "TDS of Initial Fee",
+        "Final Fee For Sec 09",
+        "GST of Final Fee For Sec 09",
+        "TDS of Final Fee For Sec 09",
+    ],
+    // Other Charges Net Group
+    "OtherChargesFields": [
+        "Taken Expense for Sec 09 filing",
+        "POA for Filing Sec 09",
+        "Fresh Notice Expense for Filing Sec 09",
+        "Attachment Batta For Sec 09",
+        "Attachment Petition",
+        "Property Attachment Expense",
+        "Sec 09 Court fee & E-Filing Expense",
+        "Attachment Lifting Expense",
+    ]
+};
+
+
+// All Charge Fields for Snapshot Box Total (Must include Demand Notice Expense)
+const CHARGE_FIELDS_FOR_SNAPSHOT = [
+    "Demand Notice Expense",
+    ...CHARGE_DEFINITIONS_138.AdvocateFeeFields,
+    ...CHARGE_DEFINITIONS_138.OtherChargesFields,
+    ...CHARGE_DEFINITIONS_09.AdvocateFeeFields,
+    ...CHARGE_DEFINITIONS_09.OtherChargesFields,
+];
+
 // Helper function to calculate the total for the Snapshot Box
 function calculateTotalCharges(record) {
-    // This function must use the ALL CHARGE_FIELDS list to calculate the overall total
-    return calculateSubtotal(record, CHARGE_FIELDS);
+    // Snapshot Total is a simple sum of ALL charges (sign = 1 for all)
+    return calculateNetTotal(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
 }
 
 
@@ -158,10 +165,7 @@ const API_URL = "/.netlify/functions/fetch-data";
 
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
-// Local storage for all data to enable client-side filtering (cascading dropdowns)
 let ALL_RECORDS = []; 
-
-// Global variable to hold the currently viewed loan record for the toggle to access
 window.CURRENT_LOAN_RECORD = null;
 
 
@@ -223,46 +227,46 @@ const DISPLAY_BLOCKS = [
             "Attachment eff Date": "Attachment eff Date",
         }
     },
-    // --- BLOCK 5: ALL CHARGE FIELDS FOR SECTION 138 ---
+    // --- BLOCK 5: Section 138 Fee & Charges (All Fields) ---
     {
         title: "5) Section 138 Fee & Charges",
         fields: {
-            "Cheque Return Charges": "Cheque Return Charges",
-            "POA for Filing Sec 138": "POA for Filing",
             "Initial Fee for Sec.138": "Initial Fee",
             "GST of Sec.138 Initial Fee": "GST of Initial Fee",
             "TDS of Sec.138 Initial Fee": "TDS of Initial Fee",
-            "Sec.138 Notice Expense": "Notice Expense",
-            "Warrant Steps of Sec 138": "Warrant Steps",
             "Final fee for Sec 138": "Final fee",
             "GST of Final fee for Sec 138": "GST of Final fee",
             "TDS of Final fee for Sec 138": "TDS of Final fee",
+            "Cheque Return Charges": "Cheque Return Charges",
+            "POA for Filing Sec 138": "POA for Filing",
+            "Sec.138 Notice Expense": "Notice Expense",
+            "Warrant Steps of Sec 138": "Warrant Steps",
         }
     },
-    // --- BLOCK 6: ALL CHARGE FIELDS FOR SECTION 09 ---
+    // --- BLOCK 6: Section 09 Fee & Charges (All Fields) ---
     {
         title: "6) Section 09 Fee & Charges",
         fields: {
-            "Taken Expense for Sec 09 filing": "Schedule Taken Expense",
-            "POA for Filing Sec 09": "POA for Filing",
             "Initial Fee for Sec 09": "Initial Fee",
             "GST of Sec 09 Initial Fee": "GST of Initial Fee",
             "TDS of Initial Fee": "TDS of Initial Fee",
+            "Final Fee For Sec 09": "Final Fee",
+            "GST of Final Fee For Sec 09": "GST of Final Fee",
+            "TDS of Final Fee For Sec 09": "TDS of Final Fee",
+            "Taken Expense for Sec 09 filing": "Schedule Taken Expense",
+            "POA for Filing Sec 09": "POA for Filing",
             "Fresh Notice Expense for Filing Sec 09": "Fresh Notice Expense",
             "Attachment Batta For Sec 09": "Attachment Batta",
             "Attachment Petition": "Attachment Petition",
             "Property Attachment Expense": "Property Attachment Expense",
             "Sec 09 Court fee & E-Filing Expense": "Court fee & E-Filing Expense",
-            "Final Fee For Sec 09": "Final Fee",
-            "GST of Final Fee For Sec 09": "GST of Final Fee",
-            "TDS of Final Fee For Sec 09": "TDS of Final Fee",
             "Attachment Lifting Expense": "Attachment Lifting Expense",
         }
     }
 ];
 
 
-// --- DOM ELEMENTS (Including new toggle elements) ---
+// --- DOM ELEMENTS ---
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -279,7 +283,6 @@ const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-// SNAPSHOT BOX ELEMENT
 const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 
 const HEADER_INPUT = document.getElementById('header_name'); 
@@ -399,25 +402,23 @@ function displayLoan() {
     NOT_FOUND_MESSAGE.style.display = 'none';
 
     if (record) {
-        // Store the record globally for the toggle listener
         window.CURRENT_LOAN_RECORD = record; 
         
         renderSnapshot(record); 
-        // Always render blocks with the current toggle state
+        // Render blocks based on current toggle state
         renderFilteredBlocks(record, ADVOCATE_FEE_TOGGLE.checked);
         
-        // Show the toggle container and ensure its state is considered
+        // Show the toggle container
         ADVOCATE_FEE_CONTROLS.style.display = 'flex'; 
         
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
-        SNAPSHOT_BOX.innerHTML = ''; // Clear snapshot on error
+        SNAPSHOT_BOX.innerHTML = ''; 
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
         
-        // Hide toggle on error
         ADVOCATE_FEE_CONTROLS.style.display = 'none'; 
     }
 }
@@ -425,17 +426,17 @@ function displayLoan() {
 
 // Function to format and render the snapshot box
 function renderSnapshot(record) {
-    SNAPSHOT_BOX.innerHTML = ''; // Clear previous data
+    SNAPSHOT_BOX.innerHTML = ''; 
 
     // Helper to get formatted currency string from a sheet header
     const getFormattedCurrency = (sheetHeader) => {
         let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
-        const number = parseFloat(String(value).replace(/[$,]/g, '').trim());
+        const number = parseNumber(value);
         if (isNaN(number)) return 'N/A';
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Calculate Total Charges (using the updated helper)
+    // Calculate Total Charges (from ALL defined charge fields)
     const rawTotalCharges = calculateTotalCharges(record);
     const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -465,7 +466,6 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
     
-    // 1. Create all block elements and store them
     const blockElements = {};
     
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
@@ -473,7 +473,6 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         const blockNumber = index + 1;
         block.classList.add('data-block', `block-${blockNumber}`);
 
-        // Set class for horizontal grid (1, 3, 5, 6) or specific classes (2, 4)
         const isChargeBlock = blockNumber === 5 || blockNumber === 6;
 
         if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) { 
@@ -489,42 +488,24 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'data-block-content';
         
-        let subtotalFields = []; 
-        let totalLabel = "";
-        
-        // Determine the fields to iterate over and the fields for the subtotal calculation
         let fieldsToRender = Object.entries(blockConfig.fields);
-        
+
+        // --- FILTERING AND SUBTOTAL LOGIC FOR BLOCKS 5 & 6 ---
         if (isChargeBlock) {
-            if (blockNumber === 5) {
-                // Default: All fields for Block 5
-                subtotalFields = Object.keys(blockConfig.fields);
-                totalLabel = "Section 138 Total Charges";
-                
-                if (isAdvocateFeeOnly) {
-                    // Filtered: Only Advocate Fee fields for Block 5
-                    fieldsToRender = Object.entries(blockConfig.fields)
-                        .filter(([sheetHeader, _]) => ADVOCATE_FEE_FIELDS_138.includes(sheetHeader));
-                    subtotalFields = ADVOCATE_FEE_FIELDS_138;
-                    totalLabel = "Section 138 Advocate Fee Subtotal";
-                }
-            } else if (blockNumber === 6) {
-                // Default: All fields for Block 6
-                subtotalFields = Object.keys(blockConfig.fields);
-                totalLabel = "Section 09 Total Charges";
-                
-                if (isAdvocateFeeOnly) {
-                    // Filtered: Only Advocate Fee fields for Block 6
-                    fieldsToRender = Object.entries(blockConfig.fields)
-                        .filter(([sheetHeader, _]) => ADVOCATE_FEE_FIELDS_09.includes(sheetHeader));
-                    subtotalFields = ADVOCATE_FEE_FIELDS_09;
-                    totalLabel = "Section 09 Advocate Fee Subtotal";
-                }
+            const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+            const allChargeFields = [...definitions.AdvocateFeeFields, ...definitions.OtherChargesFields];
+
+            if (isAdvocateFeeOnly) {
+                // TOGGLE ON: Show only Advocate Fee fields
+                fieldsToRender = fieldsToRender.filter(([sheetHeader, _]) => definitions.AdvocateFeeFields.includes(sheetHeader));
+            } else {
+                // TOGGLE OFF: Show all fields (fieldsToRender is already the full list)
             }
         }
         
         // 1. Render individual items
         fieldsToRender.forEach(([sheetHeader, displayName]) => {
+            
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             // Apply date formatting
@@ -533,20 +514,9 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             }
 
             // --- CURRENCY FORMATTING LOGIC ---
-            if (CHARGE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-                const parseNumber = (val) => {
-                    if (typeof val === 'string') {
-                        val = val.replace(/[$,]/g, '').trim();
-                    }
-                    const number = parseFloat(val);
-                    return isNaN(number) ? val : number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-                };
-                
-                const formattedValue = parseNumber(value);
-                
-                if (typeof formattedValue === 'string' && formattedValue.startsWith('₹') || (formattedValue !== value && !isNaN(parseFloat(String(formattedValue).replace(/[$,]/g, '').trim())))) {
-                    value = formattedValue;
-                }
+            if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
+                const number = parseNumber(value);
+                value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
             }
             // --- END CURRENCY FORMATTING LOGIC ---
             
@@ -571,25 +541,51 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             contentWrapper.appendChild(item);
         });
 
-        // 2. Append Subtotal Row for Charge Blocks (5 & 6)
+        // 2. Append Subtotal Rows for Charge Blocks (5 & 6)
         if (isChargeBlock) {
-            const totalAmount = calculateSubtotal(record, subtotalFields);
-            const formattedTotal = totalAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+            const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+            const sectionName = blockNumber === 5 ? "Section 138" : "Section 09";
 
-            const subtotalItem = document.createElement('div');
-            subtotalItem.className = 'data-block-item subtotal-row';
+            const advFeeNetTotal = calculateNetTotal(record, definitions.AdvocateFeeFields);
+            const otherChargesNetTotal = calculateNetTotal(record, definitions.OtherChargesFields.map(f => f)); // Simple sum
 
-            const totalLabelSpan = document.createElement('span');
-            totalLabelSpan.className = 'item-label';
-            totalLabelSpan.textContent = totalLabel;
+            if (isAdvocateFeeOnly) {
+                // TOGGLE ON: Only show one total row (Advocate Fee Total)
+                const totalItem = createSubtotalRow(
+                    `${sectionName} Advocate Fee Total`, 
+                    advFeeNetTotal, 
+                    'subtotal-row total-color'
+                );
+                contentWrapper.appendChild(totalItem);
+                
+            } else {
+                // TOGGLE OFF: Show all three required subtotal rows
 
-            const totalValueSpan = document.createElement('span');
-            totalValueSpan.className = 'item-value';
-            totalValueSpan.textContent = formattedTotal;
+                // Subtotal 1: Advocate Fee Net
+                const advFeeItem = createSubtotalRow(
+                    "Advocate Fee Net", 
+                    advFeeNetTotal, 
+                    'subtotal-row'
+                );
+                contentWrapper.appendChild(advFeeItem);
 
-            subtotalItem.appendChild(totalLabelSpan);
-            subtotalItem.appendChild(totalValueSpan);
-            contentWrapper.appendChild(subtotalItem);
+                // Subtotal 2: Other Charges Net
+                const otherChargesItem = createSubtotalRow(
+                    "Other Charges Net", 
+                    otherChargesNetTotal, 
+                    'subtotal-row'
+                );
+                contentWrapper.appendChild(otherChargesItem);
+                
+                // Subtotal 3: Sub Section Total
+                const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
+                const totalItem = createSubtotalRow(
+                    `${sectionName} Sub Section Total`, 
+                    subSectionTotal, 
+                    'subtotal-row total-color' // Use distinct class for final total
+                );
+                contentWrapper.appendChild(totalItem);
+            }
         }
         
         block.appendChild(contentWrapper);
@@ -598,33 +594,41 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
 
     // 3. Assemble the DOM structure in the correct order: B1, Grid (B2, B4), B3, B5, B6
     
-    // Create the two-column wrapper for blocks 2 and 4
     const detailGridWrapper = document.createElement('div');
     detailGridWrapper.id = 'detail-content-grid';
     
-    // Append Block 2 and Block 4 into the detail grid
     if (blockElements[2]) detailGridWrapper.appendChild(blockElements[2]);
     if (blockElements[4]) detailGridWrapper.appendChild(blockElements[4]);
     
-    // Clear and Append to the main container in the desired sequence
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     
-    // B1 (Full Width/Horizontal Grid)
     if (blockElements[1]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[1]);
-    
-    // Detail Grid (B2 & B4)
     if (detailGridWrapper.children.length > 0) {
         DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
     }
-    
-    // B3 (Full Width/Horizontal Grid)
     if (blockElements[3]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[3]);
-    
-    // B5 (Full Width/Horizontal Grid)
     if (blockElements[5]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[5]);
-    
-    // B6 (Full Width/Horizontal Grid)
     if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
+}
+
+// Helper to create a subtotal row DOM element
+function createSubtotalRow(label, value, className) {
+    const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+    const subtotalItem = document.createElement('div');
+    subtotalItem.className = `data-block-item ${className}`;
+
+    const totalLabelSpan = document.createElement('span');
+    totalLabelSpan.className = 'item-label';
+    totalLabelSpan.textContent = label;
+
+    const totalValueSpan = document.createElement('span');
+    totalValueSpan.className = 'item-value';
+    totalValueSpan.textContent = formattedValue;
+
+    subtotalItem.appendChild(totalLabelSpan);
+    subtotalItem.appendChild(totalValueSpan);
+    return subtotalItem;
 }
 // --- END MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 
@@ -635,13 +639,10 @@ document.addEventListener('DOMContentLoaded', () => {
         ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
             const isChecked = ADVOCATE_FEE_TOGGLE.checked;
             
-            // Only proceed if a record is currently loaded
             if (window.CURRENT_LOAN_RECORD) {
-                // Re-render blocks with the new filter state
                 renderFilteredBlocks(window.CURRENT_LOAN_RECORD, isChecked);
                 LOADING_STATUS.textContent = isChecked ? 'Showing Advocate Fee related charges only.' : 'Showing all charges.';
             } else {
-                // If no record is loaded, reset the toggle
                 ADVOCATE_FEE_TOGGLE.checked = false; 
                 LOADING_STATUS.textContent = 'Error: No loan data loaded to filter.';
             }
