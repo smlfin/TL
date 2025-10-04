@@ -67,35 +67,28 @@ const CRITICAL_FIELDS = [
     "CASENOSec9" 
 ];
 
-// --- CONSTANTS FOR FEES CALCULATION AND SUBTOTS (Used for Advocate Fee Toggle) ---
-
-const SECTION_138_CHARGE_FIELDS = [
+// --- UPDATED CHARGE FIELDS for Summation (Used for the Snapshot Box Total and currency formatting) ---
+const CHARGE_FIELDS = [
+    "Demand Notice Expense", // Retain this original field
+    
+    // Section 138 Fee & Charges
     "Cheque Return Charges",
     "POA for Filing Sec 138",
     "Initial Fee for Sec.138",
     "GST of Sec.138 Initial Fee",
+    "TDS of Sec.138 Initial Fee",
     "Sec.138 Notice Expense",
     "Warrant Steps of Sec 138",
     "Final fee for Sec 138",
     "GST of Final fee for Sec 138",
-];
-const SECTION_138_TDS_FIELDS = [
-    "TDS of Sec.138 Initial Fee",
-    "TDS of Final fee for Sec 138"
-];
-const SECTION_138_ADVOCATE_FIELDS = [
-    "Initial Fee for Sec.138",
-    "GST of Sec.138 Initial Fee",
-    "Final fee for Sec 138",
-    "GST of Final fee for Sec 138",
-];
+    "TDS of Final fee for Sec 138",
 
-
-const SECTION_09_CHARGE_FIELDS = [
-    "Schedule Taken Expense for Sec 09 filing",
+    // Section 09 Fee & Charges
+    "Taken Expense for Sec 09 filing",
     "POA for Filing Sec 09",
     "Initial Fee for Sec 09",
     "GST of Sec 09 Initial Fee",
+    "TDS of Initial Fee",
     "Fresh Notice Expense for Filing Sec 09",
     "Attachment Batta For Sec 09",
     "Attachment Petition",
@@ -106,118 +99,28 @@ const SECTION_09_CHARGE_FIELDS = [
     "TDS of Final Fee For Sec 09",
     "Attachment Lifting Expense"
 ];
-const SECTION_09_TDS_FIELDS = [
-    "TDS of Initial Fee",
-    "TDS of Final Fee For Sec 09"
-];
-const SECTION_09_ADVOCATE_FIELDS = [
-    "Initial Fee for Sec 09",
-    "GST of Sec 09 Initial Fee",
-    "Final Fee For Sec 09",
-    "GST of Final Fee For Sec 09",
-];
 
 
-// --- NEW CONSTANTS FOR CORRECT SNAPSHOT TOTAL CALCULATION (Total Charges - Total TDS) ---
-const ALL_CHARGE_ADDITIONS = [
-    "Demand Notice Expense", // This charge is included in the Grand Total but not Sec 138/09 subtotals
-    ...SECTION_138_CHARGE_FIELDS, 
-    ...SECTION_09_CHARGE_FIELDS
-];
-const ALL_TDS_SUBTRACTIONS = [
-    ...SECTION_138_TDS_FIELDS,
-    ...SECTION_09_TDS_FIELDS
-];
-
-// CONSTANT FOR CURRENCY FORMATTING (Includes all charge and TDS fields)
-const CHARGE_FIELDS = [
-    ...ALL_CHARGE_ADDITIONS,
-    ...ALL_TDS_SUBTRACTIONS
-];
-
-
-// Helper function to safely parse a number from a string
-const parseNumber = (value) => {
-    if (typeof value === 'string') {
-        value = value.replace(/[$,₹]/g, '').trim();
-    }
-    const number = parseFloat(value);
-    return isNaN(number) ? 0 : number;
-};
-
-// --- UPDATED: HELPER FUNCTIONS FOR CALCULATIONS ---
-
-// The Grand Total of all net charges (used for the Snapshot box)
+// Helper function to safely parse and sum charge fields
 function calculateTotalCharges(record) {
-    let totalAdditions = 0;
-    ALL_CHARGE_ADDITIONS.forEach(field => {
-        totalAdditions += parseNumber(record[field]);
+    let total = 0;
+    
+    const parseNumber = (value) => {
+        if (typeof value === 'string') {
+            // Remove commas and currency symbols
+            value = value.replace(/[$,]/g, '').trim();
+        }
+        const number = parseFloat(value);
+        return isNaN(number) ? 0 : number;
+    };
+
+    CHARGE_FIELDS.forEach(field => {
+        const value = record[field];
+        total += parseNumber(value);
     });
 
-    let totalSubtractions = 0;
-    ALL_TDS_SUBTRACTIONS.forEach(field => {
-        totalSubtractions += parseNumber(record[field]);
-    });
-
-    // The net total charge is: All Charges (Additions) - All TDS (Subtractions)
-    return totalAdditions - totalSubtractions; 
+    return total;
 }
-
-// Net charge for Demand Notice Expense (used for final validation)
-function calculateDemandNoticeCharge(record) {
-    // Assuming Demand Notice Expense has no separate TDS
-    return parseNumber(record["Demand Notice Expense"]); 
-}
-
-// Helper function to calculate Subtotal for a section (Charges - TDS)
-function calculateSectionSubtotals(record, chargeFields, tdsFields) {
-    let totalCharges = 0;
-    chargeFields.forEach(field => {
-        totalCharges += parseNumber(record[field]);
-    });
-
-    let totalTDS = 0;
-    tdsFields.forEach(field => {
-        totalTDS += parseNumber(record[field]);
-    });
-
-    return { totalCharges, totalTDS, subtotal: totalCharges - totalTDS };
-}
-
-// Helper function to calculate Advocate Fees (Initial + Final + GST - TDS)
-function calculateAdvocateFees(record, advocateFields, tdsFields) {
-    let totalAdvocateFees = 0;
-    advocateFields.forEach(field => {
-        totalAdvocateFees += parseNumber(record[field]);
-    });
-
-    let totalTDS = 0;
-    tdsFields.forEach(field => {
-        totalTDS += parseNumber(record[field]);
-    });
-
-    return { totalFees: totalAdvocateFees, subtotal: totalAdvocateFees - totalTDS };
-}
-
-// Helper to create a formatted summary row for the new validation block
-function createSummaryRow(label, rawValue, colorClass, borderStyle) {
-    const formattedValue = rawValue.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    let borderStyleClass = '';
-    if (borderStyle === 'validation') {
-        borderStyleClass = 'validation-total-row'; // Custom class for final total styling
-    } else if (borderStyle === 'info') {
-         borderStyleClass = 'info-row';
-    }
-
-    return `
-        <div class="data-block-item subtotal-row summary-row ${borderStyleClass}">
-            <span class="item-label">${label}:</span>
-            <span class="item-value ${colorClass}-value">${formattedValue}</span>
-        </div>
-    `;
-}
-
-// --- END UPDATED HELPER ---
 
 
 // API URL now points to the Netlify Function proxy
@@ -228,8 +131,11 @@ const CLIENT_SIDE_AUTH_KEY = "123";
 // Local storage for all data to enable client-side filtering (cascading dropdowns)
 let ALL_RECORDS = []; 
 
+// Global variable to hold the currently viewed loan record for the toggle to access
+window.CURRENT_LOAN_RECORD = null;
 
-// --- DISPLAY CONFIGURATION (Unchanged) ---
+
+// --- UPDATED DISPLAY CONFIGURATION ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -287,6 +193,7 @@ const DISPLAY_BLOCKS = [
             "Attachment eff Date": "Attachment eff Date",
         }
     },
+    // --- NEW BLOCK 5 (Index 4) ---
     {
         title: "5) Section 138 Fee & Charges",
         fields: {
@@ -302,6 +209,7 @@ const DISPLAY_BLOCKS = [
             "TDS of Final fee for Sec 138": "TDS of Final fee",
         }
     },
+    // --- NEW BLOCK 6 (Index 5) ---
     {
         title: "6) Section 09 Fee & Charges",
         fields: {
@@ -324,7 +232,7 @@ const DISPLAY_BLOCKS = [
 ];
 
 
-// --- DOM ELEMENTS (Unchanged) ---
+// --- DOM ELEMENTS (Including new toggle elements) ---
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -347,11 +255,13 @@ const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
-// NEW: Toggle Switch for Advocate Fees
+// --- NEW TOGGLE ELEMENTS ---
+const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
+// --- END NEW TOGGLE ELEMENTS ---
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION (Unchanged)
+// 1. INITIAL FETCH AND DROPDOWN POPULATION
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
@@ -401,7 +311,7 @@ function populateBranchDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC (Unchanged)
+// 2. CASCADING LOGIC 
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
@@ -437,10 +347,8 @@ function populateLoanDropdown() {
 }
 
 
-// 3. DISPLAY LOGIC (Search Button Click) (Unchanged, calls render functions)
+// 3. DISPLAY LOGIC (Search Button Click)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
-ADVOCATE_FEE_TOGGLE.addEventListener('change', displayLoan); 
-
 
 function displayLoan() {
     const loanNo = LOAN_SELECT.value;
@@ -460,36 +368,47 @@ function displayLoan() {
 
     DATA_VIEW_SECTION.style.display = 'block';
     NOT_FOUND_MESSAGE.style.display = 'none';
-    ADVOCATE_FEE_TOGGLE.parentNode.style.display = 'flex'; 
 
     if (record) {
+        // Store the record globally for the toggle listener
+        window.CURRENT_LOAN_RECORD = record; 
+        
         renderSnapshot(record); 
         renderBlocks(record);
+        
+        // --- ADDED: Show the toggle container and reset its state ---
+        ADVOCATE_FEE_CONTROLS.style.display = 'flex'; 
+        ADVOCATE_FEE_TOGGLE.checked = false;
+        // -----------------------------------------------------------
+        
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
-        SNAPSHOT_BOX.innerHTML = ''; 
+        SNAPSHOT_BOX.innerHTML = ''; // Clear snapshot on error
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
-        ADVOCATE_FEE_TOGGLE.parentNode.style.display = 'none'; 
+        
+        // --- ADDED: Hide toggle on error ---
+        ADVOCATE_FEE_CONTROLS.style.display = 'none'; 
+        // ------------------------------------
     }
 }
 
 
-// Function to format and render the snapshot box (Unchanged)
+// Function to format and render the snapshot box
 function renderSnapshot(record) {
-    SNAPSHOT_BOX.innerHTML = ''; 
+    SNAPSHOT_BOX.innerHTML = ''; // Clear previous data
 
     // Helper to get formatted currency string from a sheet header
     const getFormattedCurrency = (sheetHeader) => {
         let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
-        const number = parseNumber(value); 
+        const number = parseFloat(String(value).replace(/[$,]/g, '').trim());
         if (isNaN(number)) return 'N/A';
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Calculate Total Charges (NOW CORRECTLY calculates Total Charges - Total TDS)
+    // Calculate Total Charges (using the updated helper)
     const rawTotalCharges = calculateTotalCharges(record);
     const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -514,29 +433,30 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - **MODIFIED TO ADD GRAND TOTAL VALIDATION BLOCK**
+// RENDER BLOCKS FUNCTION - Now just calls the filtering function with the default state
 function renderBlocks(record) {
+    renderFilteredBlocks(record, false);
+}
+
+
+// --- NEW FUNCTION TO HANDLE RENDERING/FILTERING ---
+function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    
-    const showAdvocateOnly = ADVOCATE_FEE_TOGGLE.checked;
     
     // 1. Create all block elements and store them
     const blockElements = {};
     
-    // Calculate section totals for use in the final validation block
-    const sec138Totals = calculateSectionSubtotals(record, SECTION_138_CHARGE_FIELDS, SECTION_138_TDS_FIELDS);
-    const sec09Totals = calculateSectionSubtotals(record, SECTION_09_CHARGE_FIELDS, SECTION_09_TDS_FIELDS);
-
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         const blockNumber = index + 1;
         block.classList.add('data-block', `block-${blockNumber}`);
 
+        // Set class for horizontal grid (1, 3, 5, 6) or specific classes (2, 4)
         if (blockNumber === 1 || blockNumber === 3 || blockNumber === 5 || blockNumber === 6) { 
             block.classList.add('horizontal-grid');
-        } else if (blockNumber === 2) { 
-             block.classList.add('legal-remarks');
+        } else if (blockNumber === 2 || blockNumber === 4) { 
+             block.classList.add('vertical-list');
         }
         
         const title = document.createElement('h3');
@@ -545,33 +465,27 @@ function renderBlocks(record) {
         
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'data-block-content';
-
-        let sectionChargeFields = [];
-        let sectionTDSFields = [];
-        let sectionAdvocateFields = [];
-
-        // Determine fields based on block number for fees blocks
-        if (blockNumber === 5) { // Section 138
-            sectionChargeFields = SECTION_138_CHARGE_FIELDS;
-            sectionTDSFields = SECTION_138_TDS_FIELDS;
-            sectionAdvocateFields = SECTION_138_ADVOCATE_FIELDS;
-        } else if (blockNumber === 6) { // Section 09
-            sectionChargeFields = SECTION_09_CHARGE_FIELDS;
-            sectionTDSFields = SECTION_09_TDS_FIELDS;
-            sectionAdvocateFields = SECTION_09_ADVOCATE_FIELDS;
-        }
-
-        // Add regular fields
+        
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
             
-            // NEW: Skip fields if the toggle is ON AND the field is NOT part of the advocate's calculation
-            if (showAdvocateOnly && (blockNumber === 5 || blockNumber === 6)) {
-                const isAdvocateField = sectionAdvocateFields.includes(sheetHeader) || sectionTDSFields.includes(sheetHeader);
+            // --- NEW: FILTERING LOGIC ---
+            if (isAdvocateFeeOnly && (blockNumber === 5 || blockNumber === 6)) {
+                // If toggle is ON, only show fields containing common advocate fee terms
+                // Note: The sheetHeader is used for checking as it's the exact string from the source.
+                const filterKeys = ["Fee", "GST", "TDS", "POA", "Court"]; 
+                
+                // Convert to uppercase for case-insensitive check
+                const upperSheetHeader = sheetHeader.toUpperCase(); 
+                
+                // Check if any filter key is included in the uppercase sheet header
+                const isAdvocateField = filterKeys.some(key => upperSheetHeader.includes(key.toUpperCase()));
+                
                 if (!isAdvocateField) {
-                    return; // Skip non-advocate fields
+                    return; // Skip this field
                 }
             }
-
+            // --- END NEW: FILTERING LOGIC ---
+            
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             // Apply date formatting
@@ -579,13 +493,20 @@ function renderBlocks(record) {
                 value = formatDate(value);
             }
 
-            // --- CURRENCY FORMATTING LOGIC FOR CHARGE FIELDS ---
+            // --- CURRENCY FORMATTING LOGIC ---
             if (CHARGE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
+                const parseNumber = (val) => {
+                    if (typeof val === 'string') {
+                        val = val.replace(/[$,]/g, '').trim();
+                    }
+                    const number = parseFloat(val);
+                    return isNaN(number) ? val : number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+                };
                 
-                const number = parseNumber(value);
-                // If it's a valid number, format it as currency, otherwise return the original string
-                if (!isNaN(number)) {
-                     value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+                const formattedValue = parseNumber(value);
+                
+                if (typeof formattedValue === 'string' && formattedValue.startsWith('₹') || (formattedValue !== value && !isNaN(parseFloat(String(formattedValue).replace(/[$,]/g, '').trim())))) {
+                    value = formattedValue;
                 }
             }
             // --- END CURRENCY FORMATTING LOGIC ---
@@ -610,57 +531,6 @@ function renderBlocks(record) {
             item.appendChild(dataValue);
             contentWrapper.appendChild(item);
         });
-
-        // NEW: Add the three-tier subtotals for Blocks 5 and 6
-        if (blockNumber === 5 || blockNumber === 6) {
-            
-            // Calculate the two base subtotals
-            const advocateFees = calculateAdvocateFees(record, sectionAdvocateFields, sectionTDSFields);
-            const totals = blockNumber === 5 ? sec138Totals : sec09Totals; // Use pre-calculated totals
-
-            // --- 1. ADVOCATE FEE NET (Always shown in fees blocks) ---
-            const formattedAdvocateSubtotal = advocateFees.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-            
-            const advSubtotalItem = document.createElement('div');
-            advSubtotalItem.className = 'data-block-item subtotal-row advocate-subtotal';
-            advSubtotalItem.innerHTML = `
-                <span class="item-label">ADVOCATE FEE NET (Initial + Final + GST - TDS):</span>
-                <span class="item-value critical-value">${formattedAdvocateSubtotal}</span>
-            `;
-            contentWrapper.appendChild(advSubtotalItem);
-            
-            if (!showAdvocateOnly) {
-                 // --- 2. OTHER CHARGES NET ---
-                const otherChargesNet = totals.subtotal - advocateFees.subtotal;
-                const formattedOtherChargesNet = otherChargesNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-                
-                const otherSubtotalItem = document.createElement('div');
-                otherSubtotalItem.className = 'data-block-item subtotal-row other-subtotal';
-                otherSubtotalItem.innerHTML = `
-                    <span class="item-label">OTHER CHARGES NET (All Charges Except Advocate Fee Net):</span>
-                    <span class="item-value">${formattedOtherChargesNet}</span>
-                `;
-                // Add a divider line style for visual separation from Advocate Fee
-                otherSubtotalItem.style.borderTop = '1px dashed #ced4da'; 
-                otherSubtotalItem.style.marginBottom = '0';
-                otherSubtotalItem.style.backgroundColor = 'transparent';
-                otherSubtotalItem.querySelector('.item-value').classList.remove('critical-value');
-                contentWrapper.appendChild(otherSubtotalItem);
-
-                // --- 3. SECTION GRAND SUBTOTAL ---
-                const formattedSubtotal = totals.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-                const subtotalItem = document.createElement('div');
-                subtotalItem.className = 'data-block-item subtotal-row section-subtotal';
-                subtotalItem.innerHTML = `
-                    <span class="item-label">SECTION GRAND SUBTOTAL (All Charges - All TDS):</span>
-                    <span class="item-value critical-value">${formattedSubtotal}</span>
-                `;
-                // Remove the top border from the new style to use the dashed line above it
-                subtotalItem.style.borderTop = 'none'; 
-                contentWrapper.appendChild(subtotalItem);
-            }
-        }
 
         block.appendChild(contentWrapper);
         blockElements[blockNumber] = block;
@@ -695,40 +565,31 @@ function renderBlocks(record) {
     
     // B6 (Full Width/Horizontal Grid)
     if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
-
-    // 3. NEW: Append FINAL GRAND TOTAL VALIDATION BLOCK (Block 7)
-    if (!showAdvocateOnly) {
-        const finalSummaryBlock = document.createElement('div');
-        finalSummaryBlock.classList.add('data-block', 'block-7', 'horizontal-grid', 'summary-block');
-        
-        const summaryTitle = document.createElement('h3');
-        summaryTitle.textContent = "7) Grand Total Validation";
-        finalSummaryBlock.appendChild(summaryTitle);
-        
-        const summaryContentWrapper = document.createElement('div');
-        summaryContentWrapper.className = 'data-block-content';
-        
-        // --- Calculate Validation Values ---
-        const dneCharge = calculateDemandNoticeCharge(record);
-        const snapshotTotal = calculateTotalCharges(record); 
-        const sumOfComponents = sec138Totals.subtotal + sec09Totals.subtotal + dneCharge;
-        
-        // Add component rows
-        summaryContentWrapper.innerHTML += createSummaryRow("Section 138 Grand Subtotal Net", sec138Totals.subtotal, 'primary', 'info');
-        summaryContentWrapper.innerHTML += createSummaryRow("Section 09 Grand Subtotal Net", sec09Totals.subtotal, 'primary', 'info');
-        summaryContentWrapper.innerHTML += createSummaryRow("Demand Notice Expense Net", dneCharge, 'danger', 'info');
-
-        // Add calculated total (for visual check)
-        summaryContentWrapper.innerHTML += createSummaryRow("CALCULATED GRAND TOTAL (138 Net + 09 Net + DNE)", sumOfComponents, 'success', 'validation');
-        
-        // Add snapshot total for comparison
-        summaryContentWrapper.innerHTML += createSummaryRow("TOTAL CHARGES (Snapshot Box Value)", snapshotTotal, 'total-color', 'validation');
-
-        finalSummaryBlock.appendChild(summaryContentWrapper);
-        DATA_BLOCKS_CONTAINER.appendChild(finalSummaryBlock);
-    }
 }
+// --- END NEW FUNCTION ---
 
+
+// --- NEW: TOGGLE EVENT LISTENER ---
+document.addEventListener('DOMContentLoaded', () => {
+    // Listener is placed here to ensure all DOM elements are loaded
+    if (ADVOCATE_FEE_TOGGLE) {
+        ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
+            const isChecked = ADVOCATE_FEE_TOGGLE.checked;
+            
+            // Only proceed if a record is currently loaded
+            if (window.CURRENT_LOAN_RECORD) {
+                // Re-render blocks with the new filter state
+                renderFilteredBlocks(window.CURRENT_LOAN_RECORD, isChecked);
+                LOADING_STATUS.textContent = isChecked ? 'Showing Advocate Fee related charges only.' : 'Showing all charges.';
+            } else {
+                // If no record is loaded, reset the toggle
+                ADVOCATE_FEE_TOGGLE.checked = false; 
+                LOADING_STATUS.textContent = 'Error: No loan data loaded to filter.';
+            }
+        });
+    }
+});
+// --- END NEW: TOGGLE EVENT LISTENER ---
 
 // 4. UI Toggling (Unchanged)
 function showInputForm() {
