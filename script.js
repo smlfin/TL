@@ -77,13 +77,13 @@ const parseNumber = (value) => {
     return isNaN(number) ? 0 : number;
 };
 
-// Function to calculate subtotal with defined signs (for Advocate Fee Net)
-function calculateNetTotal(record, fields) {
+// Function to calculate net total for any group of charges 
+// (Used for Other Charges and Snapshot Total - adds all non-TDS fields, subtracts TDS)
+function calculateChargesNet(record, fields) {
     let total = 0;
     
-    // The calculation logic: (Initial Fee + GST) - TDS
     fields.forEach(field => {
-        let sign = 1; // Default is addition
+        let sign = 1; 
 
         // Check for TDS (Tax Deducted at Source) fields which should be subtracted
         if (field.includes("TDS")) {
@@ -98,12 +98,40 @@ function calculateNetTotal(record, fields) {
     return total;
 }
 
+// NEW Function to calculate the required Advocate Fee Payment Net 
+// (Fee - TDS, EXCLUDING GST - used for Advocate Fee Net and Tracker)
+function calculateAdvocateFeePaymentNet(record, feeNetFields) {
+    let total = 0;
+    
+    // feeNetFields is explicitly defined to contain only Fee and TDS fields.
+    feeNetFields.forEach(field => {
+        let sign = 1; 
+
+        // Check for TDS fields which should be subtracted
+        if (field.includes("TDS")) {
+            sign = -1;
+        }
+        
+        const value = record[field];
+        total += parseNumber(value) * sign;
+    });
+
+    return total;
+}
+
 // --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
 
 // 5) Section 138 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_138 = {
-    // Advocate Fee Net Group
-    "AdvocateFeeFields": [
+    // For calculating the Net Payment (Fee - TDS, excluding GST)
+    "AdvocateFeeNetFields": [
+        "Initial Fee for Sec.138", // Fee
+        "TDS of Sec.138 Initial Fee", // TDS (subtracted)
+        "Final fee for Sec 138", // Fee
+        "TDS of Final fee for Sec 138", // TDS (subtracted)
+    ],
+    // The list of all Advocate Fee fields to display in Block 5/Tracker breakdown
+    "AdvocateFeeFieldsDisplay": [
         "Initial Fee for Sec.138",
         "GST of Sec.138 Initial Fee",
         "TDS of Sec.138 Initial Fee",
@@ -122,8 +150,15 @@ const CHARGE_DEFINITIONS_138 = {
 
 // 6) Section 09 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_09 = {
-    // Advocate Fee Net Group
-    "AdvocateFeeFields": [
+    // For calculating the Net Payment (Fee - TDS, excluding GST)
+    "AdvocateFeeNetFields": [
+        "Initial Fee for Sec 09", // Fee
+        "TDS of Initial Fee", // TDS (subtracted)
+        "Final Fee For Sec 09", // Fee
+        "TDS of Final Fee For Sec 09", // TDS (subtracted)
+    ],
+    // The list of all Advocate Fee fields to display in Block 6/Tracker breakdown
+    "AdvocateFeeFieldsDisplay": [
         "Initial Fee for Sec 09",
         "GST of Sec 09 Initial Fee",
         "TDS of Initial Fee",
@@ -147,16 +182,16 @@ const CHARGE_DEFINITIONS_09 = {
 // All Charge Fields for Snapshot Box Total (Must include Demand Notice Expense)
 const CHARGE_FIELDS_FOR_SNAPSHOT = [
     "Demand Notice Expense",
-    ...CHARGE_DEFINITIONS_138.AdvocateFeeFields,
+    ...CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay,
     ...CHARGE_DEFINITIONS_138.OtherChargesFields,
-    ...CHARGE_DEFINITIONS_09.AdvocateFeeFields,
+    ...CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay,
     ...CHARGE_DEFINITIONS_09.OtherChargesFields,
 ];
 
 // Helper function to calculate the total for the Snapshot Box
 function calculateTotalCharges(record) {
-    // Snapshot Total is a simple sum of ALL charges (sign = 1 for all)
-    return calculateNetTotal(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
+    // Snapshot Total is a sum of ALL charges (positive and negative, like TDS)
+    return calculateChargesNet(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
 }
 
 
@@ -466,7 +501,7 @@ function renderSnapshot(record) {
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Calculate Total Charges (from ALL defined charge fields)
+    // Calculate Total Charges 
     const rawTotalCharges = calculateTotalCharges(record);
     const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -474,7 +509,7 @@ function renderSnapshot(record) {
         { header: "Loan Amount", label: "Loan Amount", value: getFormattedCurrency("Loan Amount"), class: 'success' },
         { header: "Loan Balance", label: "Loan Balance", value: getFormattedCurrency("Loan Balance"), class: 'primary' },
         { header: "Arrear Amount", label: "Arrear Amount", value: getFormattedCurrency("Arrear Amount"), class: 'danger' },
-        { header: "TOTAL CHARGES", label: "TOTAL CHARGES", value: formattedTotalCharges, class: 'total-color' },
+        { header: "TOTAL CHARGES", label: "TOTAL CHARGES (Net of TDS)", value: formattedTotalCharges, class: 'total-color' },
     ];
 
     let snapshotHTML = '';
@@ -616,15 +651,16 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
-            const allChargeFields = [...definitions.AdvocateFeeFields, ...definitions.OtherChargesFields];
+            // Use the full display list for rendering individual items
+            const allChargeFieldsDisplay = [...definitions.AdvocateFeeFieldsDisplay, ...definitions.OtherChargesFields];
             
             // Generate list of fields to render
             if (isAdvocateFeeOnly) {
-                // TOGGLE ON: Filter to show only Advocate Fee fields
-                fieldsToRender = allChargeFields.filter(sheetHeader => definitions.AdvocateFeeFields.includes(sheetHeader));
+                // TOGGLE ON: Filter to show only Advocate Fee related fields
+                fieldsToRender = allChargeFieldsDisplay.filter(sheetHeader => definitions.AdvocateFeeFieldsDisplay.includes(sheetHeader));
             } else {
                 // TOGGLE OFF: Show all charge fields
-                fieldsToRender = allChargeFields;
+                fieldsToRender = allChargeFieldsDisplay;
             }
             
             // Render charge fields
@@ -647,43 +683,46 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
             const sectionName = blockNumber === 5 ? "Section 138" : "Section 09";
 
-            const advFeeNetTotal = calculateNetTotal(record, definitions.AdvocateFeeFields);
-            const otherChargesNetTotal = calculateNetTotal(record, definitions.OtherChargesFields.map(f => f)); // Simple sum
+            // 1. Advocate Fee Net: Use the new function (Fee - TDS, NO GST)
+            const advFeeNetTotal = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
+            
+            // 2. Other Charges Net: Use the old function (Simple sum of other charges, NO TDS involved here)
+            const otherChargesNetTotal = calculateChargesNet(record, definitions.OtherChargesFields.map(f => f)); 
 
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Only show one total row (Advocate Fee Total)
                 const totalItem = createSubtotalRow(
-                    `${sectionName} Advocate Fee Total`, 
-                    advFeeNetTotal, 
-                    'subtotal-row total-color'
+                    `${sectionName} Advocate Fee Total (Net of TDS)`, 
+                    advFeeNetTotal, // Use the new Fee - TDS total
+                    'subtotal-row section-grand-total'
                 );
                 innerContent.appendChild(totalItem);
                 
             } else {
                 // TOGGLE OFF: Show all three required subtotal rows
 
-                // Subtotal 1: Advocate Fee Net
+                // Subtotal 1: Advocate Fee Net (Fee - TDS)
                 const advFeeItem = createSubtotalRow(
-                    "Advocate Fee Net", 
+                    "Advocate Fee Net (Fee - TDS)", 
                     advFeeNetTotal, 
-                    'subtotal-row'
+                    'subtotal-row advocate-fee-net'
                 );
                 innerContent.appendChild(advFeeItem);
 
-                // Subtotal 2: Other Charges Net
+                // Subtotal 2: Other Charges Net (Sum of all other charges)
                 const otherChargesItem = createSubtotalRow(
                     "Other Charges Net", 
                     otherChargesNetTotal, 
-                    'subtotal-row'
+                    'subtotal-row other-charges-net'
                 );
                 innerContent.appendChild(otherChargesItem);
                 
                 // Subtotal 3: Sub Section Total
                 const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
                 const totalItem = createSubtotalRow(
-                    `${sectionName} Sub Section Total`, 
+                    `${sectionName} Sub Section Total (Net)`, 
                     subSectionTotal, 
-                    'subtotal-row total-color'
+                    'subtotal-row section-grand-total'
                 );
                 innerContent.appendChild(totalItem);
             }
@@ -736,12 +775,14 @@ function getAdvocatePaymentDetails(record, advocateName) {
 
     // Calculate Sec 138 fees if the selected advocate is the Sec 138 advocate
     if (adv138Name === advocateName) {
-        sec138Net = calculateNetTotal(record, CHARGE_DEFINITIONS_138.AdvocateFeeFields);
+        // Use the new calculation: Fee - TDS, NO GST
+        sec138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
     }
     
     // Calculate Sec 09 fees if the selected advocate is the Sec 09 advocate
     if (adv09Name === advocateName) {
-        sec09Net = calculateNetTotal(record, CHARGE_DEFINITIONS_09.AdvocateFeeFields);
+        // Use the new calculation: Fee - TDS, NO GST
+        sec09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
     }
     
     // Combine the amounts for the final net payment for this advocate on this loan
@@ -753,6 +794,9 @@ function getAdvocatePaymentDetails(record, advocateName) {
         totalAdvocateNet,
         is138: adv138Name === advocateName,
         is09: adv09Name === advocateName,
+        // Also return the full fields display list for the breakdown popup
+        sec138Fields: CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay,
+        sec09Fields: CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay,
     };
 }
 
@@ -882,9 +926,9 @@ function showPaymentBreakdownPopup(buttonElement, advocateName) {
                 <p><b>Loan No:</b> ${loanNo} | <b>Branch:</b> ${record["Loan Branch"]}</p>
                 <hr>
                 
-                ${details.is138 ? renderSectionBreakdown(record, CHARGE_DEFINITIONS_138.AdvocateFeeFields, "Section 138 Fees", details.sec138Net) : ''}
+                ${details.is138 ? renderSectionBreakdown(record, details.sec138Fields, "Section 138 Fees", details.sec138Net) : ''}
                 
-                ${details.is09 ? renderSectionBreakdown(record, CHARGE_DEFINITIONS_09.AdvocateFeeFields, "Section 09 Fees", details.sec09Net) : ''}
+                ${details.is09 ? renderSectionBreakdown(record, details.sec09Fields, "Section 09 Fees", details.sec09Net) : ''}
 
                 <div class="grand-total-summary">
                     <span>FINAL NET PAYMENT</span>
@@ -910,6 +954,9 @@ function showPaymentBreakdownPopup(buttonElement, advocateName) {
 // Helper to render the detailed breakdown table for a section
 function renderSectionBreakdown(record, fields, sectionTitle, sectionNet) {
     let tableRows = '';
+    let totalFeeBeforeTDS = 0;
+    let totalGST = 0;
+    let totalTDS = 0;
     
     fields.forEach(field => {
         // Only include fields that have a value greater than 0
@@ -917,31 +964,79 @@ function renderSectionBreakdown(record, fields, sectionTitle, sectionNet) {
         const value = parseNumber(rawValue);
         
         if (value !== 0) {
-            const sign = field.includes("TDS") ? -1 : 1;
+            const isTDS = field.includes("TDS");
+            const isGST = field.includes("GST");
+            const isFee = !isTDS && !isGST;
+            
+            const sign = isTDS ? -1 : 1;
+            const amount = value * sign;
+
+            // Track totals for the summary rows
+            if (isFee) {
+                totalFeeBeforeTDS += value;
+            } else if (isGST) {
+                totalGST += value;
+            } else if (isTDS) {
+                // We track TDS as a positive amount for the summary, then subtract it.
+                totalTDS += value; 
+            }
+
+            // Determine row class for clear visual differentiation
+            let rowClass = '';
+            let labelSuffix = '';
+            if (isGST) {
+                rowClass = 'gst-value'; 
+                labelSuffix = '<span class="gst-label">(Not included in Net Payment)</span>';
+            } else if (isTDS) {
+                rowClass = 'minus-value';
+            } else {
+                rowClass = 'fee-value'; 
+            }
             
             tableRows += `
-                <tr>
-                    <td>${field}</td>
-                    <td class="${sign === -1 ? 'minus-value' : ''}">${(value * sign).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+                <tr class="${rowClass}">
+                    <td>${field} ${labelSuffix}</td>
+                    <td class="right-align">${amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
                 </tr>
             `;
         }
     });
-    
-    if (tableRows === '') return ''; // Hide section if all fields are zero
 
+    if (tableRows === '') return ''; // Hide section if all fields are zero
+    
+    // The final net calculation is: (Total Fees) - (Total TDS)
+    // totalFeeBeforeTDS holds the sum of "Initial Fee" and "Final Fee"
+    const calculatedNet = totalFeeBeforeTDS - totalTDS;
+
+    const gstTotalRow = totalGST > 0 ? `
+        <tr class="section-total-row gst-summary">
+            <td>Total GST:</td>
+            <td class="right-align">${totalGST.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+        </tr>
+    ` : '';
+    
     return `
         <h4>${sectionTitle} Calculation</h4>
+        <p class="calc-note">Note: Net Payment calculation uses <b>Fee - TDS</b> and <b>excludes GST</b>.</p>
         <table class="breakdown-table">
             <thead>
-                <tr><th>Fee/Charge Description</th><th class="right-align">Amount (TDS is deducted)</th></tr>
+                <tr><th>Fee/Charge Description</th><th class="right-align">Amount</th></tr>
             </thead>
             <tbody>
                 ${tableRows}
             </tbody>
             <tfoot>
                 <tr class="section-total-row">
-                    <td>${sectionTitle} Net Total:</td>
+                    <td>Total Fees (Gross):</td>
+                    <td class="right-align">${totalFeeBeforeTDS.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+                </tr>
+                <tr class="section-total-row">
+                    <td>Total TDS Deduction:</td>
+                    <td class="right-align minus-value">${(totalTDS * -1).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+                </tr>
+                ${gstTotalRow}
+                <tr class="section-total-row final-net-payment">
+                    <td>${sectionTitle} Net Payment (Fee - TDS):</td>
                     <td class="right-align">${sectionNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
                 </tr>
             </tfoot>

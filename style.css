@@ -299,15 +299,42 @@ hr {
     border-radius: 3px;
 }
 
-/* Custom Total Row */
+/* Custom Total Row (Base Style for all subtotals) */
 .data-block-item.subtotal-row {
-    background-color: var(--color-total);
+    background-color: #f8f8f8; /* Changed base color to be subtle */
     font-weight: 700;
-    color: var(--color-secondary);
+    color: #444;
     padding: 12px 15px !important; 
-    margin: 10px -15px 0 -15px; /* Extend total row across the card */
-    border-top: 2px solid var(--color-border);
+    margin: 10px -15px 0 -15px;
+    border-top: 1px solid var(--color-border);
     border-bottom: none !important;
+}
+
+
+/* --- PROMINENT SUBTOTAL STYLES (Blocks 5 & 6) --- */
+
+/* Highlight 1 & 2: Advocate Fee Net & Other Charges Net */
+.data-block-item.advocate-fee-net,
+.data-block-item.other-charges-net {
+    background-color: #e8eaf6; /* Light Blue-Gray background */
+    color: #3f51b5; /* Blue text */
+    border-top: 2px solid #c5cae9;
+    border-bottom: 2px solid #c5cae9;
+    font-size: 1.05em;
+    padding: 10px 15px !important;
+    margin: 5px -15px !important;
+}
+
+/* Highlight 3: Section Grand Total (Most prominent) */
+.data-block-item.section-grand-total {
+    background-color: var(--color-total); /* Pale Orange/Yellow background */
+    color: #d84315; /* Deep Orange Text */
+    border-top: 4px solid #f57c00; /* Strongest border */
+    border-bottom: 4px solid #f57c00;
+    font-size: 1.3em;
+    font-weight: 900;
+    padding: 18px 15px !important;
+    margin: 15px -15px 0 -15px !important;
 }
 
 /* Horizontal Grid Blocks (B1, B3, B5, B6) */
@@ -524,6 +551,14 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
     padding-bottom: 5px;
 }
 
+.calc-note {
+    font-size: 0.9em;
+    font-style: italic;
+    color: var(--color-danger);
+    font-weight: 600;
+    margin-bottom: 10px;
+}
+
 .close-button {
     position: absolute;
     top: 10px;
@@ -556,10 +591,47 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
     font-weight: 500;
 }
 
+/* Visual differentiation for rows */
+.breakdown-table .gst-value {
+    background-color: #fce4ec; /* Light pink for GST */
+    color: #ad1457; /* Dark pink text */
+}
+
+.breakdown-table .gst-label {
+    font-size: 0.85em;
+    font-weight: 500;
+    color: #888;
+    margin-left: 10px;
+    white-space: nowrap;
+}
+
+.breakdown-table .fee-value {
+    background-color: #e8f5e9; /* Light green for Fee (positive) */
+    color: #2e7d32;
+}
+
 .section-total-row td {
     font-weight: 700 !important;
-    background-color: #fffde7; /* Light yellow for subtotal */
-    border-top: 2px solid #ffeb3b;
+    background-color: #f5f5f5; /* Light gray for summary rows */
+    border-top: 1px solid #ccc;
+}
+
+/* Specific Summary Row Styles */
+.gst-summary {
+    background-color: #fce4ec !important;
+    color: #ad1457;
+}
+
+.final-net-payment {
+    background-color: var(--color-total) !important;
+    color: var(--color-primary);
+    font-size: 1.1em;
+    border-top: 3px solid var(--color-primary) !important;
+}
+
+.final-net-payment td:last-child {
+    color: var(--color-danger);
+    font-size: 1.1em;
 }
 
 .minus-value {
