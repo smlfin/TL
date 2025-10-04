@@ -191,69 +191,16 @@ hr {
     box-shadow: var(--shadow-light);
 }
 
-/* 4a. Accordion Header & Basic Info Wrapper (For blocks 1-4) */
-.data-block .accordion-header {
+/* Clean Block Header */
+.data-block h3 {
     padding: 12px 15px;
-    background-color: #fafafa;
-    border-bottom: 1px solid var(--color-border);
-    margin: 0;
-    font-size: 1.15em;
-    font-weight: 600;
-    color: var(--color-secondary);
-    cursor: pointer; /* Indicate clickability */
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background-color 0.2s;
-}
-
-.data-block .accordion-header:hover {
-    background-color: #f0f0f0;
-}
-
-.data-block .accordion-header h3 {
-    margin: 0;
-    font-size: 1em;
-    font-weight: 600;
-    color: var(--color-secondary);
-}
-
-.accordion-icon {
-    font-size: 0.8em;
-    margin-left: 10px;
-    transition: transform 0.3s;
-    user-select: none;
-}
-
-/* 4b. Basic Info Wrapper (Visible part of the accordion) */
-.basic-info-wrapper {
-    padding: 15px;
-}
-
-/* 4c. Collapsible Content */
-.accordion-content {
-    /* Use max-height and overflow hidden for smooth transition */
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.3s ease-out, padding 0.3s ease-out;
-}
-
-.accordion-content.expanded {
-    max-height: 2000px; /* Large enough value to contain content */
-    border-top: 1px solid #f0f0f0; /* Separator for clarity */
-}
-
-/* Style for Blocks 5 & 6 (Non-accordion blocks) - Use h3 styling directly */
-.data-block:not(#block-1):not(#block-2):not(#block-3):not(#block-4) h3 {
-    padding: 12px 15px;
-    background-color: #fafafa;
+    background-color: #fafafa; /* Very light gray for header */
     border-bottom: 1px solid var(--color-border);
     margin: 0;
     font-size: 1.15em;
     font-weight: 600;
     color: var(--color-secondary);
 }
-
 
 .data-block-content {
     padding: 15px; 
@@ -268,7 +215,6 @@ hr {
     border-bottom: 1px solid #f0f0f0; /* Subtle line between items */
 }
 
-/* Remove bottom border on last item, unless it's a grid item */
 .data-block-item:last-child {
     border-bottom: none;
 }
@@ -308,16 +254,6 @@ hr {
     margin: 10px -15px 0 -15px; /* Extend total row across the card */
     border-top: 2px solid var(--color-border);
     border-bottom: none !important;
-    
-    /* Ensure subtotal rows are distinct in the grid layout for Blocks 5 & 6 */
-    grid-column: 1 / -1; 
-}
-
-/* Total Total Row Styling */
-.data-block-item.total-color {
-    background-color: #ffb74d; /* Darker orange for the final total */
-    color: #333;
-    font-size: 1.1em;
 }
 
 /* Horizontal Grid Blocks (B1, B3, B5, B6) */
@@ -346,17 +282,6 @@ hr {
     text-align: left;
     font-weight: 600;
     font-size: 1em;
-}
-
-/* SPECIAL CASE: Basic info wrapper in horizontal blocks (B1, B3) */
-.data-block.horizontal-grid .basic-info-wrapper {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-    gap: 15px 30px; 
-}
-.data-block.horizontal-grid .basic-info-wrapper .data-block-item {
-    padding: 0;
-    border-bottom: none;
 }
 
 
@@ -404,7 +329,7 @@ hr {
     border-radius: 4px;
 }
 
-/* --- 6. ADVOCATE FEE TOGGLE --- */
+/* --- 6. ADVOCATE FEE TOGGLE (Original Loan View Toggle) --- */
 #advocate-fee-controls {
     display: flex;
     justify-content: flex-end;
@@ -437,7 +362,170 @@ input:checked + .slider { background-color: var(--color-primary); }
 input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transform: translateX(26px); transform: translateX(26px); }
 
 
-/* --- 7. RESPONSIVENESS --- */
+/* --- 7. ADVOCATE PAYMENT TRACKER STYLES (NEW) --- */
+.total-color-text {
+    color: #f57c00; /* Orange for emphasis */
+    font-weight: 700;
+}
+
+#advocate-payments-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 15px;
+    font-size: 1em;
+}
+
+#advocate-payments-table th,
+#advocate-payments-table td {
+    padding: 12px 15px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+#advocate-payments-table th {
+    background-color: #e3f2fd; /* Light blue header */
+    color: var(--color-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+}
+
+#advocate-payments-table tr:hover {
+    background-color: #f8fafd;
+}
+
+#advocate-payments-table td.right-align,
+#advocate-payments-table th.right-align {
+    text-align: right;
+}
+
+/* Grand Total Footer */
+#advocate-payments-table tfoot td {
+    font-weight: 700;
+    border-top: 3px solid var(--color-primary);
+    background-color: var(--color-total); 
+}
+
+#advocate-payments-table tfoot .total-label {
+    text-align: right;
+    font-size: 1.1em;
+}
+#advocate-payments-table tfoot .total-value {
+    color: var(--color-danger);
+    font-size: 1.2em;
+}
+
+.breakdown-button {
+    background: none;
+    border: none;
+    color: var(--color-primary);
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+    text-decoration: underline;
+    transition: color 0.15s;
+    font-size: 1em; /* Inherit font size from table cell */
+}
+
+.breakdown-button:hover {
+    color: #1565c0;
+}
+
+
+/* --- 8. MODAL/POPUP STYLES (NEW) --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.6);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.modal-content {
+    background-color: var(--color-surface);
+    padding: 30px;
+    border-radius: 8px;
+    box-shadow: var(--shadow-medium);
+    width: 90%;
+    max-width: 600px;
+    position: relative;
+    max-height: 80vh;
+    overflow-y: auto;
+}
+
+.modal-content h3 {
+    margin-top: 0;
+    color: var(--color-primary);
+}
+
+.modal-content h4 {
+    color: var(--color-secondary);
+    margin-top: 20px;
+    border-bottom: 1px dashed var(--color-border);
+    padding-bottom: 5px;
+}
+
+.close-button {
+    position: absolute;
+    top: 10px;
+    right: 20px;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+    color: #999;
+}
+
+.breakdown-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 10px;
+    font-size: 0.95em;
+}
+
+.breakdown-table th,
+.breakdown-table td {
+    padding: 8px;
+    border: 1px solid #f0f0f0;
+}
+
+.breakdown-table th {
+    background-color: #f4f7f9;
+}
+
+.breakdown-table td:last-child {
+    text-align: right;
+    font-weight: 500;
+}
+
+.section-total-row td {
+    font-weight: 700 !important;
+    background-color: #fffde7; /* Light yellow for subtotal */
+    border-top: 2px solid #ffeb3b;
+}
+
+.minus-value {
+    color: var(--color-danger); /* Highlight deducted amounts */
+}
+
+.grand-total-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 1.3em;
+    font-weight: 700;
+    padding: 15px;
+    background-color: var(--color-total);
+    border: 1px solid #ffc107;
+    margin-top: 20px;
+}
+
+
+/* --- 9. RESPONSIVENESS --- */
 @media (max-width: 1000px) {
     .snapshot-item {
         flex: 1 1 45%; /* 2 items per row on tablets */
@@ -473,8 +561,5 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
     }
     .data-block.horizontal-grid .data-block-content {
         grid-template-columns: 1fr; /* Stack grid items on mobile */
-    }
-    .data-block.horizontal-grid .basic-info-wrapper {
-        grid-template-columns: 1fr;
     }
 }
