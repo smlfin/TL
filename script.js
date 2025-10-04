@@ -68,20 +68,6 @@ const CRITICAL_FIELDS = [
 ];
 
 
-// --- ACCORDION CONFIGURATION ---
-const ACCORDION_BLOCKS = [1, 2, 3, 4];
-const BASIC_FIELDS = {
-    // Block 1: Customer & Loan Details (Horizontal Grid)
-    1: ["Loan No", "Customer Name", "Arrear Amount", "Loan Balance"],
-    // Block 2: Legal Action Recommendation & Remarks (Vertical List)
-    2: ["Demand Notice Sent Date", "Legal Remarks"],
-    // Block 3: Cheque return status (Horizontal Grid)
-    3: ["CHEQ. NO.", "CQ RETURN DATE", "CASE NO"],
-    // Block 4: Section 9 Status (Vertical List)
-    4: ["Sec/9 Filing Date", "Sec/9 Case No"],
-};
-
-
 // Helper function to safely parse a value
 const parseNumber = (value) => {
     if (typeof value === 'string') {
@@ -105,6 +91,7 @@ function calculateNetTotal(record, fields) {
         }
         
         const value = record[field];
+        // Use parseNumber here, which is critical for robustness against non-numeric inputs
         total += parseNumber(value) * sign;
     });
 
@@ -299,7 +286,7 @@ const DATA_INPUT = document.getElementById('data_value');
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 
-// NEW ELEMENTS FOR ADVOCATE TRACKER
+// ELEMENTS FOR ADVOCATE TRACKER
 const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 
@@ -321,7 +308,7 @@ async function initialLoad() {
             ALL_RECORDS = result.data;
             populateBranchDropdown(ALL_RECORDS);
             populateAdvocateDropdown(ALL_RECORDS); // NEW: Populate advocate list
-            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. or use the Advocate Tracker.';
+            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. to view file details, or use the Advocate Tracker.';
         } else {
             LOADING_STATUS.textContent = '❌ Error: Could not load data from the server.';
             BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
@@ -354,7 +341,7 @@ function populateBranchDropdown(records) {
     BRANCH_SELECT.disabled = false;
 }
 
-// NEW FUNCTION: Populate Advocate Dropdown
+// Populate Advocate Dropdown
 function populateAdvocateDropdown(records) {
     const advocates = new Set();
     records.forEach(record => {
@@ -383,7 +370,7 @@ function populateAdvocateDropdown(records) {
 }
 
 
-// 2. CASCADING LOGIC (Unchanged)
+// 2. CASCADING LOGIC
 BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
 LOAN_SELECT.addEventListener('change', () => {
     SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
@@ -419,7 +406,7 @@ function populateLoanDropdown() {
 }
 
 
-// 3. DISPLAY LOGIC (Search Button Click) - Now calls renderFilteredBlocks
+// 3. DISPLAY LOGIC (Search Button Click)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
 
 function displayLoan() {
@@ -467,7 +454,7 @@ function displayLoan() {
 }
 
 
-// Function to format and render the snapshot box (Unchanged)
+// Function to format and render the snapshot box
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = ''; 
 
@@ -535,7 +522,7 @@ function processValue(record, sheetHeader) {
         value = formatDate(value);
     }
 
-    // Apply currency formatting
+    // Apply currency formatting ONLY for display in the blocks
     if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
         const number = parseNumber(value);
         value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
@@ -543,7 +530,7 @@ function processValue(record, sheetHeader) {
     return value;
 }
 
-// Helper to create a subtotal row DOM element (Unchanged)
+// Helper to create a subtotal row DOM element
 function createSubtotalRow(label, value, className) {
     const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -564,7 +551,7 @@ function createSubtotalRow(label, value, className) {
 }
 
 
-// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION (Handles Accordion and Subtotals) ---
+// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION (Fixes Accordion and Blocks 5/6) ---
 function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
@@ -578,7 +565,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         block.classList.add('data-block');
 
         const isChargeBlock = blockNumber === 5 || blockNumber === 6;
-        const isAccordionBlock = ACCORDION_BLOCKS.includes(blockNumber);
+        const isCollapsible = blockNumber >= 1 && blockNumber <= 4; // Blocks 1-4 are collapsible
         
         // Add layout classes
         if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) { 
@@ -587,78 +574,60 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
              block.classList.add('vertical-list');
         }
 
-        // --- Block Header (Accordion Header) ---
+        // --- Block Header ---
         const header = document.createElement('div');
-        header.classList.add('accordion-header');
+        header.classList.add('block-header'); 
         
-        if (isAccordionBlock) {
-            // Blocks 1, 2, 3, 4 are collapsed by default
-            header.classList.add('collapsed'); 
-        } else {
-            // Blocks 5, 6 are always expanded
-            header.classList.add('expanded');
+        if (isCollapsible) {
+            header.classList.add('accordion-header', 'collapsed'); // Start collapsed
         }
 
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
         header.appendChild(title);
         
-        const icon = document.createElement('span');
-        icon.classList.add('accordion-icon');
-        icon.textContent = '▶'; // Right arrow icon
-        header.appendChild(icon);
+        if (isCollapsible) {
+            const icon = document.createElement('span');
+            icon.classList.add('accordion-icon');
+            icon.textContent = '▶'; // Right arrow icon
+            header.appendChild(icon);
+        }
+        
         block.appendChild(header);
 
         
-        let allFields = Object.entries(blockConfig.fields);
-        let fieldsToRender = allFields; // Fields that go into the expandable content
-        let basicFieldsToRender = [];  // Fields that go into the always visible content
-        
-        // --- Split fields for Accordion Blocks (1, 2, 3, 4) ---
-        if (isAccordionBlock) {
-            const basicFieldsSet = new Set(BASIC_FIELDS[blockNumber] || []);
-            
-            // Separate basic fields from the rest
-            basicFieldsToRender = allFields.filter(([sheetHeader, _]) => basicFieldsSet.has(sheetHeader));
-            fieldsToRender = allFields.filter(([sheetHeader, _]) => !basicFieldsSet.has(sheetHeader));
-            
-            // 1a. Render Basic Info Wrapper (Always Visible)
-            const basicInfoWrapper = document.createElement('div');
-            basicInfoWrapper.className = 'basic-info-wrapper';
-            
-            basicFieldsToRender.forEach(([sheetHeader, displayName]) => {
-                const value = processValue(record, sheetHeader);
-                basicInfoWrapper.appendChild(renderDataItem(sheetHeader, displayName, value));
-            });
-            block.appendChild(basicInfoWrapper);
-        }
-
-        // --- Collapsible/Main Content Wrapper ---
+        // --- Content Wrapper (Collapsible or Always Expanded) ---
         const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'accordion-content';
-        if (!isAccordionBlock) {
-            // Blocks 5 and 6 are always expanded
-            contentWrapper.classList.add('expanded');
+        contentWrapper.className = 'data-block-content-wrapper'; 
+
+        if (isCollapsible) {
+            contentWrapper.classList.add('accordion-content'); 
+        } else {
+            contentWrapper.classList.add('always-expanded'); // Blocks 5/6 always visible
         }
         
         const innerContent = document.createElement('div');
         innerContent.className = 'data-block-content';
         
+        let allFields = Object.entries(blockConfig.fields);
+        let fieldsToRender = allFields; 
+
         // --- Filtering and Rendering Logic for All Blocks (including Charge Blocks 5 & 6) ---
         
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
             const allChargeFields = [...definitions.AdvocateFeeFields, ...definitions.OtherChargesFields];
             
+            // Generate list of fields to render
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Filter to show only Advocate Fee fields
                 fieldsToRender = allChargeFields.filter(sheetHeader => definitions.AdvocateFeeFields.includes(sheetHeader));
             } else {
-                // TOGGLE OFF: Use the full list of fields from the definitions (ensure order)
+                // TOGGLE OFF: Show all charge fields
                 fieldsToRender = allChargeFields;
             }
             
-            // For charge blocks, we need to iterate over the array of field names, not the full block config entries.
+            // Render charge fields
             fieldsToRender.forEach(sheetHeader => {
                 const displayName = blockConfig.fields[sheetHeader];
                 const value = processValue(record, sheetHeader);
@@ -666,7 +635,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             });
             
         } else {
-            // Standard blocks (1, 2, 3, 4): render remaining fields
+            // Standard blocks (1, 2, 3, 4): render all fields
             fieldsToRender.forEach(([sheetHeader, displayName]) => {
                 const value = processValue(record, sheetHeader);
                 innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
@@ -980,10 +949,7 @@ function renderSectionBreakdown(record, fields, sectionTitle, sectionNet) {
     `;
 }
 
-// --- END NEW ADVOCATE PAYMENT TRACKER LOGIC ---
-
-
-// --- NEW: ACCORDION EVENT LISTENER LOGIC (Unchanged) ---
+// --- ACCORDION EVENT LISTENER LOGIC (FIXED) ---
 function addAccordionListeners() {
     // Remove old listeners (if any)
     document.querySelectorAll('.data-block .accordion-header').forEach(header => {
@@ -997,24 +963,25 @@ function addAccordionListeners() {
 }
 
 function toggleAccordion() {
-    // 'this' is the header element
-    const content = this.nextElementSibling.nextElementSibling || this.nextElementSibling; // Get the content div
-    const icon = this.querySelector('.accordion-icon');
+    // 'this' is the header element (.accordion-header)
+    const header = this;
+    const content = header.nextElementSibling; // The content wrapper is the next sibling
     
     if (content && content.classList.contains('accordion-content')) {
-        const isExpanded = content.classList.contains('expanded');
+        const isExpanded = header.classList.contains('expanded');
+        const icon = header.querySelector('.accordion-icon');
         
         if (isExpanded) {
             // Collapse
             content.classList.remove('expanded');
-            this.classList.remove('expanded');
-            this.classList.add('collapsed');
+            header.classList.remove('expanded');
+            header.classList.add('collapsed');
             icon.textContent = '▶';
         } else {
             // Expand
             content.classList.add('expanded');
-            this.classList.add('expanded');
-            this.classList.remove('collapsed');
+            header.classList.add('expanded');
+            header.classList.remove('collapsed');
             icon.textContent = '▼';
         }
     }

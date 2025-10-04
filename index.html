@@ -11,6 +11,23 @@
     <div id="main-wrapper"> 
         <h1>Loan Data Search Portal</h1>
 
+        <section id="advocate-tracker-section">
+            <h2>Advocate Payment Tracker</h2>
+            
+            <div class="search-controls">
+                <div class="search-group" style="flex-grow: 0; min-width: 300px;">
+                    <select id="advocate-tracker-select" required>
+                        <option value="">-- Loading Advocates --</option>
+                    </select>
+                </div>
+            </div>
+
+            <div id="advocate-payments-view" style="margin-top: 20px;">
+                <p>Select an Advocate to see their payment summary.</p>
+            </div>
+        </section>
+        <hr>
+
         <section id="data-search">
             <h2>Select Loan to View Details</h2>
             
@@ -36,30 +53,13 @@
         
         <hr>
 
-        <section id="advocate-tracker-section">
-            <h2>Advocate Payment Tracker</h2>
-            
-            <div class="search-controls">
-                <div class="search-group" style="flex-grow: 0; min-width: 300px;">
-                    <select id="advocate-tracker-select" required>
-                        <option value="">-- Loading Advocates --</option>
-                    </select>
-                </div>
-            </div>
-
-            <div id="advocate-payments-view" style="margin-top: 20px;">
-                <p>Select an Advocate to see their payment summary.</p>
-            </div>
-        </section>
-        <hr>
-
         <section id="data-view-blocks" style="display: none;">
             <h2 class="loan-details-header">Loan File Details: <span id="display-loan-no"></span></h2>
             
             <div id="loan-snapshot-box"></div>
 
             <div id="advocate-fee-controls" style="display: none;">
-                <label for="advocate-fee-toggle" class="toggle-label">Show Advocate Fee Only:</label>
+                <label for="advocate-fee-toggle" class="toggle-label">Show Advocate Fee related charges only:</label>
                 <label class="switch">
                     <input type="checkbox" id="advocate-fee-toggle">
                     <span class="slider round"></span>

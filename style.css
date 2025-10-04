@@ -191,20 +191,74 @@ hr {
     box-shadow: var(--shadow-light);
 }
 
-/* Clean Block Header */
-.data-block h3 {
+/* Block Header (Applies to both accordion and non-accordion) */
+.block-header {
     padding: 12px 15px;
-    background-color: #fafafa; /* Very light gray for header */
+    background-color: #fafafa;
     border-bottom: 1px solid var(--color-border);
+    margin: 0;
+}
+
+.block-header h3 {
     margin: 0;
     font-size: 1.15em;
     font-weight: 600;
     color: var(--color-secondary);
+    display: inline-block;
 }
 
+
+/* Accordion Header Styles (Only for blocks 1-4) */
+.accordion-header {
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.15s;
+}
+
+.accordion-header:hover {
+    background-color: #f0f0f0;
+}
+
+.accordion-icon {
+    font-size: 0.8em;
+    color: var(--color-primary);
+    transition: transform 0.3s;
+    margin-left: 10px;
+}
+
+.accordion-header.expanded .accordion-icon {
+    /* Rotated down arrow */
+    transform: rotate(90deg); 
+}
+
+/* Collapsible Content Wrapper */
+.data-block-content-wrapper {
+    /* Base style for the wrapper */
+    overflow: hidden;
+}
+
+.data-block-content-wrapper.accordion-content {
+    /* Initial state for collapsible content */
+    max-height: 0;
+    opacity: 0;
+    transition: max-height 0.4s ease-out, opacity 0.3s ease-out;
+}
+
+.data-block-content-wrapper.accordion-content.expanded {
+    /* Expanded state */
+    max-height: 2000px; /* Large enough number to cover all content */
+    opacity: 1;
+    transition: max-height 0.6s ease-in, opacity 0.3s ease-in 0.3s;
+}
+
+
+/* Content inside the wrapper */
 .data-block-content {
     padding: 15px; 
 }
+
 
 /* Fixed Alignment for all Data Items */
 .data-block-item {
@@ -362,7 +416,7 @@ input:checked + .slider { background-color: var(--color-primary); }
 input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transform: translateX(26px); transform: translateX(26px); }
 
 
-/* --- 7. ADVOCATE PAYMENT TRACKER STYLES (NEW) --- */
+/* --- 7. ADVOCATE PAYMENT TRACKER STYLES --- */
 .total-color-text {
     color: #f57c00; /* Orange for emphasis */
     font-weight: 700;
@@ -432,7 +486,7 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
 }
 
 
-/* --- 8. MODAL/POPUP STYLES (NEW) --- */
+/* --- 8. MODAL/POPUP STYLES --- */
 .modal-overlay {
     position: fixed;
     top: 0;
