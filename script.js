@@ -67,11 +67,37 @@ const CRITICAL_FIELDS = [
     "CASENOSec9" 
 ];
 
-// --- UPDATED CHARGE FIELDS for Summation (Used for the Snapshot Box Total and currency formatting) ---
+// --- ADVOCATE FEE DEFINITIONS FOR FILTERING & SUBTOTALS ---
+
+// Fields that constitute the core Advocate Fee for Sec 138 (Block 5)
+const ADVOCATE_FEE_FIELDS_138 = [
+    "Initial Fee for Sec.138",
+    "GST of Sec.138 Initial Fee",
+    "TDS of Sec.138 Initial Fee",
+    "Final fee for Sec 138",
+    "GST of Final fee for Sec 138",
+    "TDS of Final fee for Sec 138",
+];
+
+// Fields that constitute the core Advocate Fee for Sec 09 (Block 6)
+const ADVOCATE_FEE_FIELDS_09 = [
+    "Initial Fee for Sec 09",
+    "GST of Sec 09 Initial Fee",
+    "TDS of Initial Fee",
+    "Final Fee For Sec 09",
+    "GST of Final Fee For Sec 09",
+    "TDS of Final Fee For Sec 09",
+];
+
+// Map all advocate fee fields for easy access in the rendering logic
+const ADVOCATE_FEE_FIELDS_MAP = {
+    5: ADVOCATE_FEE_FIELDS_138,
+    6: ADVOCATE_FEE_FIELDS_09,
+};
+
+// All Charge Fields (Same as before, used for overall calculation and unfiltered view)
 const CHARGE_FIELDS = [
-    "Demand Notice Expense", // Retain this original field
-    
-    // Section 138 Fee & Charges
+    "Demand Notice Expense",
     "Cheque Return Charges",
     "POA for Filing Sec 138",
     "Initial Fee for Sec.138",
@@ -82,8 +108,6 @@ const CHARGE_FIELDS = [
     "Final fee for Sec 138",
     "GST of Final fee for Sec 138",
     "TDS of Final fee for Sec 138",
-
-    // Section 09 Fee & Charges
     "Taken Expense for Sec 09 filing",
     "POA for Filing Sec 09",
     "Initial Fee for Sec 09",
@@ -101,8 +125,8 @@ const CHARGE_FIELDS = [
 ];
 
 
-// Helper function to safely parse and sum charge fields
-function calculateTotalCharges(record) {
+// Helper function to safely parse and sum a list of charge fields
+function calculateSubtotal(record, fields) {
     let total = 0;
     
     const parseNumber = (value) => {
@@ -114,12 +138,18 @@ function calculateTotalCharges(record) {
         return isNaN(number) ? 0 : number;
     };
 
-    CHARGE_FIELDS.forEach(field => {
+    fields.forEach(field => {
         const value = record[field];
         total += parseNumber(value);
     });
 
     return total;
+}
+
+// Helper function to calculate the total for the Snapshot Box
+function calculateTotalCharges(record) {
+    // This function must use the ALL CHARGE_FIELDS list to calculate the overall total
+    return calculateSubtotal(record, CHARGE_FIELDS);
 }
 
 
@@ -135,7 +165,7 @@ let ALL_RECORDS = [];
 window.CURRENT_LOAN_RECORD = null;
 
 
-// --- UPDATED DISPLAY CONFIGURATION ---
+// --- DISPLAY CONFIGURATION ---
 const DISPLAY_BLOCKS = [
     {
         title: "1) Customer & Loan Details",
@@ -193,7 +223,7 @@ const DISPLAY_BLOCKS = [
             "Attachment eff Date": "Attachment eff Date",
         }
     },
-    // --- NEW BLOCK 5 (Index 4) ---
+    // --- BLOCK 5: ALL CHARGE FIELDS FOR SECTION 138 ---
     {
         title: "5) Section 138 Fee & Charges",
         fields: {
@@ -209,11 +239,11 @@ const DISPLAY_BLOCKS = [
             "TDS of Final fee for Sec 138": "TDS of Final fee",
         }
     },
-    // --- NEW BLOCK 6 (Index 5) ---
+    // --- BLOCK 6: ALL CHARGE FIELDS FOR SECTION 09 ---
     {
         title: "6) Section 09 Fee & Charges",
         fields: {
-            "Schedule Taken Expense for Sec 09 filing": "Schedule Taken Expense",
+            "Taken Expense for Sec 09 filing": "Schedule Taken Expense",
             "POA for Filing Sec 09": "POA for Filing",
             "Initial Fee for Sec 09": "Initial Fee",
             "GST of Sec 09 Initial Fee": "GST of Initial Fee",
@@ -255,10 +285,9 @@ const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 
-// --- NEW TOGGLE ELEMENTS ---
+// --- TOGGLE ELEMENTS ---
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
-// --- END NEW TOGGLE ELEMENTS ---
 
 
 // 1. INITIAL FETCH AND DROPDOWN POPULATION
@@ -374,12 +403,11 @@ function displayLoan() {
         window.CURRENT_LOAN_RECORD = record; 
         
         renderSnapshot(record); 
-        renderBlocks(record);
+        // Always render blocks with the current toggle state
+        renderFilteredBlocks(record, ADVOCATE_FEE_TOGGLE.checked);
         
-        // --- ADDED: Show the toggle container and reset its state ---
+        // Show the toggle container and ensure its state is considered
         ADVOCATE_FEE_CONTROLS.style.display = 'flex'; 
-        ADVOCATE_FEE_TOGGLE.checked = false;
-        // -----------------------------------------------------------
         
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}.`;
     } else {
@@ -389,9 +417,8 @@ function displayLoan() {
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
         
-        // --- ADDED: Hide toggle on error ---
+        // Hide toggle on error
         ADVOCATE_FEE_CONTROLS.style.display = 'none'; 
-        // ------------------------------------
     }
 }
 
@@ -433,13 +460,7 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - Now just calls the filtering function with the default state
-function renderBlocks(record) {
-    renderFilteredBlocks(record, false);
-}
-
-
-// --- NEW FUNCTION TO HANDLE RENDERING/FILTERING ---
+// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
@@ -453,7 +474,9 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         block.classList.add('data-block', `block-${blockNumber}`);
 
         // Set class for horizontal grid (1, 3, 5, 6) or specific classes (2, 4)
-        if (blockNumber === 1 || blockNumber === 3 || blockNumber === 5 || blockNumber === 6) { 
+        const isChargeBlock = blockNumber === 5 || blockNumber === 6;
+
+        if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) { 
             block.classList.add('horizontal-grid');
         } else if (blockNumber === 2 || blockNumber === 4) { 
              block.classList.add('vertical-list');
@@ -466,26 +489,42 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'data-block-content';
         
-        Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-            
-            // --- NEW: FILTERING LOGIC ---
-            if (isAdvocateFeeOnly && (blockNumber === 5 || blockNumber === 6)) {
-                // If toggle is ON, only show fields containing common advocate fee terms
-                // Note: The sheetHeader is used for checking as it's the exact string from the source.
-                const filterKeys = ["Fee", "GST", "TDS", "POA", "Court"]; 
+        let subtotalFields = []; 
+        let totalLabel = "";
+        
+        // Determine the fields to iterate over and the fields for the subtotal calculation
+        let fieldsToRender = Object.entries(blockConfig.fields);
+        
+        if (isChargeBlock) {
+            if (blockNumber === 5) {
+                // Default: All fields for Block 5
+                subtotalFields = Object.keys(blockConfig.fields);
+                totalLabel = "Section 138 Total Charges";
                 
-                // Convert to uppercase for case-insensitive check
-                const upperSheetHeader = sheetHeader.toUpperCase(); 
+                if (isAdvocateFeeOnly) {
+                    // Filtered: Only Advocate Fee fields for Block 5
+                    fieldsToRender = Object.entries(blockConfig.fields)
+                        .filter(([sheetHeader, _]) => ADVOCATE_FEE_FIELDS_138.includes(sheetHeader));
+                    subtotalFields = ADVOCATE_FEE_FIELDS_138;
+                    totalLabel = "Section 138 Advocate Fee Subtotal";
+                }
+            } else if (blockNumber === 6) {
+                // Default: All fields for Block 6
+                subtotalFields = Object.keys(blockConfig.fields);
+                totalLabel = "Section 09 Total Charges";
                 
-                // Check if any filter key is included in the uppercase sheet header
-                const isAdvocateField = filterKeys.some(key => upperSheetHeader.includes(key.toUpperCase()));
-                
-                if (!isAdvocateField) {
-                    return; // Skip this field
+                if (isAdvocateFeeOnly) {
+                    // Filtered: Only Advocate Fee fields for Block 6
+                    fieldsToRender = Object.entries(blockConfig.fields)
+                        .filter(([sheetHeader, _]) => ADVOCATE_FEE_FIELDS_09.includes(sheetHeader));
+                    subtotalFields = ADVOCATE_FEE_FIELDS_09;
+                    totalLabel = "Section 09 Advocate Fee Subtotal";
                 }
             }
-            // --- END NEW: FILTERING LOGIC ---
-            
+        }
+        
+        // 1. Render individual items
+        fieldsToRender.forEach(([sheetHeader, displayName]) => {
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             // Apply date formatting
@@ -532,11 +571,32 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             contentWrapper.appendChild(item);
         });
 
+        // 2. Append Subtotal Row for Charge Blocks (5 & 6)
+        if (isChargeBlock) {
+            const totalAmount = calculateSubtotal(record, subtotalFields);
+            const formattedTotal = totalAmount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+            const subtotalItem = document.createElement('div');
+            subtotalItem.className = 'data-block-item subtotal-row';
+
+            const totalLabelSpan = document.createElement('span');
+            totalLabelSpan.className = 'item-label';
+            totalLabelSpan.textContent = totalLabel;
+
+            const totalValueSpan = document.createElement('span');
+            totalValueSpan.className = 'item-value';
+            totalValueSpan.textContent = formattedTotal;
+
+            subtotalItem.appendChild(totalLabelSpan);
+            subtotalItem.appendChild(totalValueSpan);
+            contentWrapper.appendChild(subtotalItem);
+        }
+        
         block.appendChild(contentWrapper);
         blockElements[blockNumber] = block;
     });
 
-    // 2. Assemble the DOM structure in the correct order: B1, Grid (B2, B4), B3, B5, B6
+    // 3. Assemble the DOM structure in the correct order: B1, Grid (B2, B4), B3, B5, B6
     
     // Create the two-column wrapper for blocks 2 and 4
     const detailGridWrapper = document.createElement('div');
@@ -566,12 +626,11 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     // B6 (Full Width/Horizontal Grid)
     if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
 }
-// --- END NEW FUNCTION ---
+// --- END MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 
 
-// --- NEW: TOGGLE EVENT LISTENER ---
+// --- TOGGLE EVENT LISTENER ---
 document.addEventListener('DOMContentLoaded', () => {
-    // Listener is placed here to ensure all DOM elements are loaded
     if (ADVOCATE_FEE_TOGGLE) {
         ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
             const isChecked = ADVOCATE_FEE_TOGGLE.checked;
@@ -589,7 +648,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
-// --- END NEW: TOGGLE EVENT LISTENER ---
+// --- END TOGGLE EVENT LISTENER ---
 
 // 4. UI Toggling (Unchanged)
 function showInputForm() {
