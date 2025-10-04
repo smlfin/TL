@@ -84,10 +84,10 @@ const CHARGE_FIELDS = [
     "TDS of Final fee for Sec 138",
 
     // Section 09 Fee & Charges
-    "Taken Expense for Sec 09 filing",
+    "Schedule Taken Expense for Sec 09 filing",
     "POA for Filing Sec 09",
     "Initial Fee for Sec 09",
-    "GST of Sec 09, Initial Fee",
+    "GST of Sec 09 Initial Fee",
     "TDS of Initial Fee",
     "Fresh Notice Expense for Filing Sec 09",
     "Attachment Batta For Sec 09",
@@ -100,27 +100,104 @@ const CHARGE_FIELDS = [
     "Attachment Lifting Expense"
 ];
 
+// --- NEW CONSTANTS FOR SUBTOTALLING ---
+
+const SECTION_138_CHARGE_FIELDS = [
+    "Cheque Return Charges",
+    "POA for Filing Sec 138",
+    "Initial Fee for Sec.138",
+    "GST of Sec.138 Initial Fee",
+    "Sec.138 Notice Expense",
+    "Warrant Steps of Sec 138",
+    "Final fee for Sec 138",
+    "GST of Final fee for Sec 138",
+];
+const SECTION_138_TDS_FIELDS = [
+    "TDS of Sec.138 Initial Fee",
+    "TDS of Final fee for Sec 138"
+];
+const SECTION_138_ADVOCATE_FIELDS = [
+    "Initial Fee for Sec.138",
+    "GST of Sec.138 Initial Fee",
+    "Final fee for Sec 138",
+    "GST of Final fee for Sec 138",
+];
+
+
+const SECTION_09_CHARGE_FIELDS = [
+    "Schedule Taken Expense for Sec 09 filing",
+    "POA for Filing Sec 09",
+    "Initial Fee for Sec 09",
+    "GST of Sec 09 Initial Fee",
+    "Fresh Notice Expense for Filing Sec 09",
+    "Attachment Batta For Sec 09",
+    "Attachment Petition",
+    "Property Attachment Expense",
+    "Sec 09 Court fee & E-Filing Expense",
+    "Final Fee For Sec 09",
+    "GST of Final Fee For Sec 09",
+    "Attachment Lifting Expense"
+];
+const SECTION_09_TDS_FIELDS = [
+    "TDS of Initial Fee",
+    "TDS of Final Fee For Sec 09"
+];
+const SECTION_09_ADVOCATE_FIELDS = [
+    "Initial Fee for Sec 09",
+    "GST of Sec 09 Initial Fee",
+    "Final Fee For Sec 09",
+    "GST of Final Fee For Sec 09",
+];
+
+
+// Helper function to safely parse a number from a string
+const parseNumber = (value) => {
+    if (typeof value === 'string') {
+        value = value.replace(/[$,₹]/g, '').trim();
+    }
+    const number = parseFloat(value);
+    return isNaN(number) ? 0 : number;
+};
 
 // Helper function to safely parse and sum charge fields
 function calculateTotalCharges(record) {
     let total = 0;
-    
-    const parseNumber = (value) => {
-        if (typeof value === 'string') {
-            // Remove commas and currency symbols
-            value = value.replace(/[$,]/g, '').trim();
-        }
-        const number = parseFloat(value);
-        return isNaN(number) ? 0 : number;
-    };
-
     CHARGE_FIELDS.forEach(field => {
-        const value = record[field];
-        total += parseNumber(value);
+        total += parseNumber(record[field]);
     });
-
     return total;
 }
+
+// NEW: Helper function to calculate Subtotal for a section (Charges - TDS)
+function calculateSectionSubtotals(record, chargeFields, tdsFields) {
+    let totalCharges = 0;
+    chargeFields.forEach(field => {
+        totalCharges += parseNumber(record[field]);
+    });
+
+    let totalTDS = 0;
+    tdsFields.forEach(field => {
+        totalTDS += parseNumber(record[field]);
+    });
+
+    return { totalCharges, totalTDS, subtotal: totalCharges - totalTDS };
+}
+
+// NEW: Helper function to calculate Advocate Fees (Initial + Final + GST - TDS)
+function calculateAdvocateFees(record, advocateFields, tdsFields) {
+    let totalAdvocateFees = 0;
+    advocateFields.forEach(field => {
+        totalAdvocateFees += parseNumber(record[field]);
+    });
+
+    let totalTDS = 0;
+    tdsFields.forEach(field => {
+        totalTDS += parseNumber(record[field]);
+    });
+
+    return { totalFees: totalAdvocateFees, subtotal: totalAdvocateFees - totalTDS };
+}
+// --- END NEW HELPERS ---
 
 
 // API URL now points to the Netlify Function proxy
@@ -229,7 +306,7 @@ const DISPLAY_BLOCKS = [
 ];
 
 
-// --- DOM ELEMENTS (Unchanged) ---
+// --- DOM ELEMENTS (UPDATED) ---
 const FORM = document.getElementById('record-form');
 const MESSAGE_ELEMENT = document.getElementById('submission-message');
 const AUTH_KEY_INPUT = document.getElementById('auth-key');
@@ -251,6 +328,9 @@ const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
+
+// NEW: Toggle Switch for Advocate Fees
+const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 
 
 // 1. INITIAL FETCH AND DROPDOWN POPULATION (Unchanged)
@@ -339,8 +419,10 @@ function populateLoanDropdown() {
 }
 
 
-// 3. DISPLAY LOGIC (Search Button Click) (Unchanged)
+// 3. DISPLAY LOGIC (Search Button Click) (UPDATED: Added Toggle Listener)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
+ADVOCATE_FEE_TOGGLE.addEventListener('change', displayLoan); // Re-render blocks when toggle changes
+
 
 function displayLoan() {
     const loanNo = LOAN_SELECT.value;
@@ -360,6 +442,7 @@ function displayLoan() {
 
     DATA_VIEW_SECTION.style.display = 'block';
     NOT_FOUND_MESSAGE.style.display = 'none';
+    ADVOCATE_FEE_TOGGLE.parentNode.style.display = 'flex'; // Show toggle
 
     if (record) {
         renderSnapshot(record); 
@@ -371,6 +454,7 @@ function displayLoan() {
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
+        ADVOCATE_FEE_TOGGLE.parentNode.style.display = 'none'; // Hide toggle on error
     }
 }
 
@@ -382,7 +466,7 @@ function renderSnapshot(record) {
     // Helper to get formatted currency string from a sheet header
     const getFormattedCurrency = (sheetHeader) => {
         let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
-        const number = parseFloat(String(value).replace(/[$,]/g, '').trim());
+        const number = parseNumber(value); // Using the general parseNumber
         if (isNaN(number)) return 'N/A';
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
@@ -412,10 +496,12 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - **UPDATED LOGIC**
+// RENDER BLOCKS FUNCTION - **MODIFIED LOGIC**
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
+    
+    const showAdvocateOnly = ADVOCATE_FEE_TOGGLE.checked;
     
     // 1. Create all block elements and store them
     const blockElements = {};
@@ -438,8 +524,33 @@ function renderBlocks(record) {
         
         const contentWrapper = document.createElement('div');
         contentWrapper.className = 'data-block-content';
-        
+
+        let sectionChargeFields = [];
+        let sectionTDSFields = [];
+        let sectionAdvocateFields = [];
+
+        // Determine fields based on block number for fees blocks
+        if (blockNumber === 5) { // Section 138
+            sectionChargeFields = SECTION_138_CHARGE_FIELDS;
+            sectionTDSFields = SECTION_138_TDS_FIELDS;
+            sectionAdvocateFields = SECTION_138_ADVOCATE_FIELDS;
+        } else if (blockNumber === 6) { // Section 09
+            sectionChargeFields = SECTION_09_CHARGE_FIELDS;
+            sectionTDSFields = SECTION_09_TDS_FIELDS;
+            sectionAdvocateFields = SECTION_09_ADVOCATE_FIELDS;
+        }
+
+        // Add regular fields
         Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
+            
+            // NEW: Skip fields if the toggle is ON AND the field is NOT part of the advocate's calculation
+            if (showAdvocateOnly && (blockNumber === 5 || blockNumber === 6)) {
+                const isAdvocateField = sectionAdvocateFields.includes(sheetHeader) || sectionTDSFields.includes(sheetHeader);
+                if (!isAdvocateField) {
+                    return; // Skip non-advocate fields
+                }
+            }
+
             let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
             
             // Apply date formatting
@@ -449,22 +560,11 @@ function renderBlocks(record) {
 
             // --- CURRENCY FORMATTING LOGIC FOR CHARGE FIELDS ---
             if (CHARGE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-                const parseNumber = (val) => {
-                    if (typeof val === 'string') {
-                        // Remove commas and currency symbols before parsing
-                        val = val.replace(/[$,]/g, '').trim();
-                    }
-                    const number = parseFloat(val);
-                    // If it's a valid number, format it as currency, otherwise return the original string
-                    return isNaN(number) ? val : number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-                };
                 
-                const formattedValue = parseNumber(value);
-                
-                // Check if the value was successfully converted to a currency string (starts with ₹) 
-                // or if it was successfully parsed but not equal to the original value (meaning formatting happened).
-                if (typeof formattedValue === 'string' && formattedValue.startsWith('₹') || (formattedValue !== value && !isNaN(parseFloat(String(formattedValue).replace(/[$,]/g, '').trim())))) {
-                    value = formattedValue;
+                const number = parseNumber(value);
+                // If it's a valid number, format it as currency, otherwise return the original string
+                if (!isNaN(number)) {
+                     value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
                 }
             }
             // --- END CURRENCY FORMATTING LOGIC ---
@@ -489,6 +589,37 @@ function renderBlocks(record) {
             item.appendChild(dataValue);
             contentWrapper.appendChild(item);
         });
+
+        // NEW: Add subtotals for Blocks 5 and 6
+        if (blockNumber === 5 || blockNumber === 6) {
+            
+            // --- 1. Advocate Fee Subtotal Row ---
+            const advocateFees = calculateAdvocateFees(record, sectionAdvocateFields, sectionTDSFields);
+            const formattedAdvocateSubtotal = advocateFees.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+            
+            const advSubtotalItem = document.createElement('div');
+            advSubtotalItem.className = 'data-block-item subtotal-row advocate-subtotal';
+            advSubtotalItem.innerHTML = `
+                <span class="item-label">ADVOCATE FEE NET (Initial + Final + GST - TDS):</span>
+                <span class="item-value critical-value">${formattedAdvocateSubtotal}</span>
+            `;
+            contentWrapper.appendChild(advSubtotalItem);
+            
+            // --- 2. Full Section Subtotal Row ---
+            const totals = calculateSectionSubtotals(record, sectionChargeFields, sectionTDSFields);
+            const formattedSubtotal = totals.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+            // Only show this subtotal if the advocate-only toggle is OFF
+            if (!showAdvocateOnly) {
+                const subtotalItem = document.createElement('div');
+                subtotalItem.className = 'data-block-item subtotal-row section-subtotal';
+                subtotalItem.innerHTML = `
+                    <span class="item-label">SECTION SUBTOTAL (All Charges - All TDS):</span>
+                    <span class="item-value critical-value">${formattedSubtotal}</span>
+                `;
+                contentWrapper.appendChild(subtotalItem);
+            }
+        }
 
         block.appendChild(contentWrapper);
         blockElements[blockNumber] = block;

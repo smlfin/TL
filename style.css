@@ -334,6 +334,110 @@ select:disabled {
     max-width: none;
 }
 
+/* NEW: Subtotal Row Styling for Blocks 5 and 6 */
+.data-block.horizontal-grid .data-block-item.subtotal-row {
+    grid-column: 1 / -1; /* Make it span the full width */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 0;
+    margin: 10px 0;
+    font-size: 1.1em;
+    border-top: 2px solid var(--color-primary);
+    border-bottom: 2px solid var(--color-primary);
+    background-color: var(--color-total);
+}
+.data-block.horizontal-grid .data-block-item.subtotal-row .item-label {
+    font-weight: 700;
+    color: var(--color-primary);
+    font-size: 1em;
+    margin-bottom: 0;
+}
+.data-block.horizontal-grid .data-block-item.subtotal-row .item-value {
+    font-size: 1.1em;
+    color: var(--color-danger); /* Keep danger color for emphasis */
+    font-weight: 900;
+}
+
+
+/* NEW: Advocate Fee Toggle Switch Styling */
+#advocate-fee-controls {
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    margin-bottom: 15px;
+    padding: 10px;
+    background-color: var(--color-surface);
+    border-radius: 6px;
+    border: 1px solid #e9ecef;
+}
+
+.toggle-label {
+    margin-right: 10px;
+    font-weight: 600;
+    color: var(--color-secondary);
+}
+
+.switch {
+  position: relative;
+  display: inline-block;
+  width: 50px;
+  height: 24px;
+}
+
+.switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: #ccc;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+.slider:before {
+  position: absolute;
+  content: "";
+  height: 16px;
+  width: 16px;
+  left: 4px;
+  bottom: 4px;
+  background-color: white;
+  -webkit-transition: .4s;
+  transition: .4s;
+}
+
+input:checked + .slider {
+  background-color: var(--color-primary);
+}
+
+input:focus + .slider {
+  box-shadow: 0 0 1px var(--color-primary);
+}
+
+input:checked + .slider:before {
+  -webkit-transform: translateX(26px);
+  -ms-transform: translateX(26px);
+  transform: translateX(26px);
+}
+
+/* Rounded sliders */
+.slider.round {
+  border-radius: 24px;
+}
+
+.slider.round:before {
+  border-radius: 50%;
+}
+
 
 /* WRITE FORM LAYOUT */
 #dynamic-field {
