@@ -191,16 +191,69 @@ hr {
     box-shadow: var(--shadow-light);
 }
 
-/* Clean Block Header */
-.data-block h3 {
+/* 4a. Accordion Header & Basic Info Wrapper (For blocks 1-4) */
+.data-block .accordion-header {
     padding: 12px 15px;
-    background-color: #fafafa; /* Very light gray for header */
+    background-color: #fafafa;
+    border-bottom: 1px solid var(--color-border);
+    margin: 0;
+    font-size: 1.15em;
+    font-weight: 600;
+    color: var(--color-secondary);
+    cursor: pointer; /* Indicate clickability */
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.2s;
+}
+
+.data-block .accordion-header:hover {
+    background-color: #f0f0f0;
+}
+
+.data-block .accordion-header h3 {
+    margin: 0;
+    font-size: 1em;
+    font-weight: 600;
+    color: var(--color-secondary);
+}
+
+.accordion-icon {
+    font-size: 0.8em;
+    margin-left: 10px;
+    transition: transform 0.3s;
+    user-select: none;
+}
+
+/* 4b. Basic Info Wrapper (Visible part of the accordion) */
+.basic-info-wrapper {
+    padding: 15px;
+}
+
+/* 4c. Collapsible Content */
+.accordion-content {
+    /* Use max-height and overflow hidden for smooth transition */
+    max-height: 0;
+    overflow: hidden;
+    transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+}
+
+.accordion-content.expanded {
+    max-height: 2000px; /* Large enough value to contain content */
+    border-top: 1px solid #f0f0f0; /* Separator for clarity */
+}
+
+/* Style for Blocks 5 & 6 (Non-accordion blocks) - Use h3 styling directly */
+.data-block:not(#block-1):not(#block-2):not(#block-3):not(#block-4) h3 {
+    padding: 12px 15px;
+    background-color: #fafafa;
     border-bottom: 1px solid var(--color-border);
     margin: 0;
     font-size: 1.15em;
     font-weight: 600;
     color: var(--color-secondary);
 }
+
 
 .data-block-content {
     padding: 15px; 
@@ -215,6 +268,7 @@ hr {
     border-bottom: 1px solid #f0f0f0; /* Subtle line between items */
 }
 
+/* Remove bottom border on last item, unless it's a grid item */
 .data-block-item:last-child {
     border-bottom: none;
 }
@@ -254,6 +308,16 @@ hr {
     margin: 10px -15px 0 -15px; /* Extend total row across the card */
     border-top: 2px solid var(--color-border);
     border-bottom: none !important;
+    
+    /* Ensure subtotal rows are distinct in the grid layout for Blocks 5 & 6 */
+    grid-column: 1 / -1; 
+}
+
+/* Total Total Row Styling */
+.data-block-item.total-color {
+    background-color: #ffb74d; /* Darker orange for the final total */
+    color: #333;
+    font-size: 1.1em;
 }
 
 /* Horizontal Grid Blocks (B1, B3, B5, B6) */
@@ -282,6 +346,17 @@ hr {
     text-align: left;
     font-weight: 600;
     font-size: 1em;
+}
+
+/* SPECIAL CASE: Basic info wrapper in horizontal blocks (B1, B3) */
+.data-block.horizontal-grid .basic-info-wrapper {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
+    gap: 15px 30px; 
+}
+.data-block.horizontal-grid .basic-info-wrapper .data-block-item {
+    padding: 0;
+    border-bottom: none;
 }
 
 
@@ -398,5 +473,8 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
     }
     .data-block.horizontal-grid .data-block-content {
         grid-template-columns: 1fr; /* Stack grid items on mobile */
+    }
+    .data-block.horizontal-grid .basic-info-wrapper {
+        grid-template-columns: 1fr;
     }
 }

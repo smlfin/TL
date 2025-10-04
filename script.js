@@ -69,9 +69,10 @@ const CRITICAL_FIELDS = [
 
 
 // --- ACCORDION CONFIGURATION ---
-const ACCORDION_BLOCKS = [1, 2, 3, 4];
+// Blocks 1, 2, 3, 4 will be accordions (expandable)
+const ACCORDION_BLOCKS = [1, 2, 3, 4]; 
 const BASIC_FIELDS = {
-    // Block 1: Customer & Loan Details (Horizontal Grid)
+    // Block 1: Customer & Loan Details (Horizontal Grid) - These fields will be always visible
     1: ["Loan No", "Customer Name", "Arrear Amount", "Loan Balance"],
     // Block 2: Legal Action Recommendation & Remarks (Vertical List)
     2: ["Demand Notice Sent Date", "Legal Remarks"],
@@ -503,19 +504,20 @@ function processValue(record, sheetHeader) {
     }
 
     // Apply currency formatting
-    if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
+    if ((CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) || sheetHeader === "Loan Amount" || sheetHeader === "Loan Balance" || sheetHeader === "Arrear Amount") && value !== 'N/A') {
         const number = parseNumber(value);
         value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     }
     return value;
 }
 
-// Helper to create a subtotal row DOM element (Unchanged)
+// Helper to create a subtotal row DOM element
 function createSubtotalRow(label, value, className) {
     const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
     const subtotalItem = document.createElement('div');
-    subtotalItem.className = `data-block-item ${className}`;
+    // Important: subtotal-row class handles grid-column: 1 / -1 in CSS for spanning
+    subtotalItem.className = `data-block-item subtotal-row ${className}`; 
 
     const totalLabelSpan = document.createElement('span');
     totalLabelSpan.className = 'item-label';
@@ -554,41 +556,40 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
              block.classList.add('vertical-list');
         }
 
-        // --- Block Header (Accordion Header) ---
+        // --- Block Header ---
         const header = document.createElement('div');
-        header.classList.add('accordion-header');
         
         if (isAccordionBlock) {
-            // Blocks 1, 2, 3, 4 are collapsed by default
-            header.classList.add('collapsed'); 
-        } else {
-            // Blocks 5, 6 are always expanded
-            header.classList.add('expanded');
+            // Blocks 1, 2, 3, 4: Accordion Header
+            header.classList.add('accordion-header');
+            header.classList.add('collapsed'); // Default to collapsed
         }
-
+        // Blocks 5, 6 will just use a standard H3 from CSS, no accordion class or click event
+        
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
         header.appendChild(title);
         
-        const icon = document.createElement('span');
-        icon.classList.add('accordion-icon');
-        icon.textContent = '▶'; // Right arrow icon
-        header.appendChild(icon);
-        block.appendChild(header);
-
+        let contentWrapper;
+        let innerContent = document.createElement('div');
+        innerContent.className = 'data-block-content';
         
-        let allFields = Object.entries(blockConfig.fields);
-        let fieldsToRender = allFields; // Fields that go into the expandable content
-        let basicFieldsToRender = [];  // Fields that go into the always visible content
-        
-        // --- Split fields for Accordion Blocks (1, 2, 3, 4) ---
+        // --- Accordion Block Logic (1, 2, 3, 4) ---
         if (isAccordionBlock) {
+            
             const basicFieldsSet = new Set(BASIC_FIELDS[blockNumber] || []);
             
-            // Separate basic fields from the rest
-            basicFieldsToRender = allFields.filter(([sheetHeader, _]) => basicFieldsSet.has(sheetHeader));
-            fieldsToRender = allFields.filter(([sheetHeader, _]) => !basicFieldsSet.has(sheetHeader));
+            // Separate fields for always visible (basic) and collapsible (full)
+            const basicFieldsToRender = Object.entries(blockConfig.fields).filter(([sheetHeader, _]) => basicFieldsSet.has(sheetHeader));
+            const fieldsToRender = Object.entries(blockConfig.fields).filter(([sheetHeader, _]) => !basicFieldsSet.has(sheetHeader));
             
+            // Icon for accordion
+            const icon = document.createElement('span');
+            icon.classList.add('accordion-icon');
+            icon.textContent = '▶'; // Right arrow icon
+            header.appendChild(icon);
+            block.appendChild(header);
+
             // 1a. Render Basic Info Wrapper (Always Visible)
             const basicInfoWrapper = document.createElement('div');
             basicInfoWrapper.className = 'basic-info-wrapper';
@@ -598,24 +599,28 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 basicInfoWrapper.appendChild(renderDataItem(sheetHeader, displayName, value));
             });
             block.appendChild(basicInfoWrapper);
-        }
 
-        // --- Collapsible/Main Content Wrapper ---
-        const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'accordion-content';
-        if (!isAccordionBlock) {
-            // Blocks 5 and 6 are always expanded
-            contentWrapper.classList.add('expanded');
-        }
-        
-        const innerContent = document.createElement('div');
-        innerContent.className = 'data-block-content';
-        
-        // --- Filtering and Rendering Logic for All Blocks (including Charge Blocks 5 & 6) ---
-        
-        if (isChargeBlock) {
+            // 1b. Collapsible/Main Content Wrapper
+            contentWrapper = document.createElement('div');
+            contentWrapper.className = 'accordion-content';
+            
+            // Render the rest of the fields into the inner content
+            fieldsToRender.forEach(([sheetHeader, displayName]) => {
+                const value = processValue(record, sheetHeader);
+                innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
+            });
+            
+        } else {
+            // --- Non-Accordion Block Logic (5, 6) ---
+            block.appendChild(header); // Append the plain H3 header
+
+            contentWrapper = document.createElement('div');
+            contentWrapper.className = 'accordion-content expanded'; // Always expanded
+            
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
             const allChargeFields = [...definitions.AdvocateFeeFields, ...definitions.OtherChargesFields];
+            
+            let fieldsToRender;
             
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Filter to show only Advocate Fee fields
@@ -625,35 +630,26 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 fieldsToRender = allChargeFields;
             }
             
-            // For charge blocks, we need to iterate over the array of field names, not the full block config entries.
+            // Render charge fields
             fieldsToRender.forEach(sheetHeader => {
                 const displayName = blockConfig.fields[sheetHeader];
                 const value = processValue(record, sheetHeader);
                 innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
             });
             
-        } else {
-            // Standard blocks (1, 2, 3, 4): render remaining fields
-            fieldsToRender.forEach(([sheetHeader, displayName]) => {
-                const value = processValue(record, sheetHeader);
-                innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
-            });
-        }
-        
-        // 2. Append Subtotal Rows for Charge Blocks (5 & 6)
-        if (isChargeBlock) {
-            const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+            // 2. Append Subtotal Rows for Charge Blocks (5 & 6)
             const sectionName = blockNumber === 5 ? "Section 138" : "Section 09";
 
             const advFeeNetTotal = calculateNetTotal(record, definitions.AdvocateFeeFields);
             const otherChargesNetTotal = calculateNetTotal(record, definitions.OtherChargesFields.map(f => f)); // Simple sum
+            const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
 
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Only show one total row (Advocate Fee Total)
                 const totalItem = createSubtotalRow(
-                    `${sectionName} Advocate Fee Total`, 
+                    `${sectionName} Advocate Fee Total (Net)`, 
                     advFeeNetTotal, 
-                    'subtotal-row total-color'
+                    'total-color' // Use total-color class for final total look
                 );
                 innerContent.appendChild(totalItem);
                 
@@ -664,7 +660,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 const advFeeItem = createSubtotalRow(
                     "Advocate Fee Net", 
                     advFeeNetTotal, 
-                    'subtotal-row'
+                    ''
                 );
                 innerContent.appendChild(advFeeItem);
 
@@ -672,16 +668,15 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 const otherChargesItem = createSubtotalRow(
                     "Other Charges Net", 
                     otherChargesNetTotal, 
-                    'subtotal-row'
+                    ''
                 );
                 innerContent.appendChild(otherChargesItem);
                 
                 // Subtotal 3: Sub Section Total
-                const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
                 const totalItem = createSubtotalRow(
                     `${sectionName} Sub Section Total`, 
                     subSectionTotal, 
-                    'subtotal-row total-color'
+                    'total-color' // Use total-color class for final total look
                 );
                 innerContent.appendChild(totalItem);
             }
@@ -722,13 +717,16 @@ function addAccordionListeners() {
 
     // Add new listeners
     document.querySelectorAll('.data-block .accordion-header').forEach(header => {
-        header.addEventListener('click', toggleAccordion);
+        // Only add listeners to actual accordion headers (Blocks 1-4)
+        if(header.parentNode.id.match(/block-[1-4]/)) {
+            header.addEventListener('click', toggleAccordion);
+        }
     });
 }
 
 function toggleAccordion() {
     // 'this' is the header element
-    const content = this.nextElementSibling.nextElementSibling || this.nextElementSibling; // Get the content div
+    const content = this.nextElementSibling.nextElementSibling; // Get the .accordion-content div (after .basic-info-wrapper)
     const icon = this.querySelector('.accordion-icon');
     
     if (content && content.classList.contains('accordion-content')) {
