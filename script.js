@@ -103,6 +103,7 @@ const SECTION_09_CHARGE_FIELDS = [
     "Sec 09 Court fee & E-Filing Expense",
     "Final Fee For Sec 09",
     "GST of Final Fee For Sec 09",
+    "TDS of Final Fee For Sec 09",
     "Attachment Lifting Expense"
 ];
 const SECTION_09_TDS_FIELDS = [
@@ -119,7 +120,7 @@ const SECTION_09_ADVOCATE_FIELDS = [
 
 // --- NEW CONSTANTS FOR CORRECT SNAPSHOT TOTAL CALCULATION (Total Charges - Total TDS) ---
 const ALL_CHARGE_ADDITIONS = [
-    "Demand Notice Expense", 
+    "Demand Notice Expense", // This charge is included in the Grand Total but not Sec 138/09 subtotals
     ...SECTION_138_CHARGE_FIELDS, 
     ...SECTION_09_CHARGE_FIELDS
 ];
@@ -144,7 +145,9 @@ const parseNumber = (value) => {
     return isNaN(number) ? 0 : number;
 };
 
-// --- UPDATED: CORRECTED CALCULATION FOR SNAPSHOT BOX TOTAL CHARGES ---
+// --- UPDATED: HELPER FUNCTIONS FOR CALCULATIONS ---
+
+// The Grand Total of all net charges (used for the Snapshot box)
 function calculateTotalCharges(record) {
     let totalAdditions = 0;
     ALL_CHARGE_ADDITIONS.forEach(field => {
@@ -159,10 +162,14 @@ function calculateTotalCharges(record) {
     // The net total charge is: All Charges (Additions) - All TDS (Subtractions)
     return totalAdditions - totalSubtractions; 
 }
-// --- END UPDATED HELPER ---
 
+// Net charge for Demand Notice Expense (used for final validation)
+function calculateDemandNoticeCharge(record) {
+    // Assuming Demand Notice Expense has no separate TDS
+    return parseNumber(record["Demand Notice Expense"]); 
+}
 
-// NEW: Helper function to calculate Subtotal for a section (Charges - TDS)
+// Helper function to calculate Subtotal for a section (Charges - TDS)
 function calculateSectionSubtotals(record, chargeFields, tdsFields) {
     let totalCharges = 0;
     chargeFields.forEach(field => {
@@ -177,7 +184,7 @@ function calculateSectionSubtotals(record, chargeFields, tdsFields) {
     return { totalCharges, totalTDS, subtotal: totalCharges - totalTDS };
 }
 
-// NEW: Helper function to calculate Advocate Fees (Initial + Final + GST - TDS)
+// Helper function to calculate Advocate Fees (Initial + Final + GST - TDS)
 function calculateAdvocateFees(record, advocateFields, tdsFields) {
     let totalAdvocateFees = 0;
     advocateFields.forEach(field => {
@@ -191,6 +198,26 @@ function calculateAdvocateFees(record, advocateFields, tdsFields) {
 
     return { totalFees: totalAdvocateFees, subtotal: totalAdvocateFees - totalTDS };
 }
+
+// Helper to create a formatted summary row for the new validation block
+function createSummaryRow(label, rawValue, colorClass, borderStyle) {
+    const formattedValue = rawValue.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+    let borderStyleClass = '';
+    if (borderStyle === 'validation') {
+        borderStyleClass = 'validation-total-row'; // Custom class for final total styling
+    } else if (borderStyle === 'info') {
+         borderStyleClass = 'info-row';
+    }
+
+    return `
+        <div class="data-block-item subtotal-row summary-row ${borderStyleClass}">
+            <span class="item-label">${label}:</span>
+            <span class="item-value ${colorClass}-value">${formattedValue}</span>
+        </div>
+    `;
+}
+
+// --- END UPDATED HELPER ---
 
 
 // API URL now points to the Netlify Function proxy
@@ -487,7 +514,7 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION - **MODIFIED SUBTOTAL LOGIC**
+// RENDER BLOCKS FUNCTION - **MODIFIED TO ADD GRAND TOTAL VALIDATION BLOCK**
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
@@ -497,6 +524,10 @@ function renderBlocks(record) {
     // 1. Create all block elements and store them
     const blockElements = {};
     
+    // Calculate section totals for use in the final validation block
+    const sec138Totals = calculateSectionSubtotals(record, SECTION_138_CHARGE_FIELDS, SECTION_138_TDS_FIELDS);
+    const sec09Totals = calculateSectionSubtotals(record, SECTION_09_CHARGE_FIELDS, SECTION_09_TDS_FIELDS);
+
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         const blockNumber = index + 1;
@@ -585,7 +616,7 @@ function renderBlocks(record) {
             
             // Calculate the two base subtotals
             const advocateFees = calculateAdvocateFees(record, sectionAdvocateFields, sectionTDSFields);
-            const totals = calculateSectionSubtotals(record, sectionChargeFields, sectionTDSFields);
+            const totals = blockNumber === 5 ? sec138Totals : sec09Totals; // Use pre-calculated totals
 
             // --- 1. ADVOCATE FEE NET (Always shown in fees blocks) ---
             const formattedAdvocateSubtotal = advocateFees.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
@@ -606,7 +637,7 @@ function renderBlocks(record) {
                 const otherSubtotalItem = document.createElement('div');
                 otherSubtotalItem.className = 'data-block-item subtotal-row other-subtotal';
                 otherSubtotalItem.innerHTML = `
-                    <span class="item-label">OTHER CHARGES NET:</span>
+                    <span class="item-label">OTHER CHARGES NET (All Charges Except Advocate Fee Net):</span>
                     <span class="item-value">${formattedOtherChargesNet}</span>
                 `;
                 // Add a divider line style for visual separation from Advocate Fee
@@ -616,7 +647,7 @@ function renderBlocks(record) {
                 otherSubtotalItem.querySelector('.item-value').classList.remove('critical-value');
                 contentWrapper.appendChild(otherSubtotalItem);
 
-                // --- 3. SECTION SUBTOTAL (GRAND TOTAL) ---
+                // --- 3. SECTION GRAND SUBTOTAL ---
                 const formattedSubtotal = totals.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
                 const subtotalItem = document.createElement('div');
@@ -664,6 +695,38 @@ function renderBlocks(record) {
     
     // B6 (Full Width/Horizontal Grid)
     if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
+
+    // 3. NEW: Append FINAL GRAND TOTAL VALIDATION BLOCK (Block 7)
+    if (!showAdvocateOnly) {
+        const finalSummaryBlock = document.createElement('div');
+        finalSummaryBlock.classList.add('data-block', 'block-7', 'horizontal-grid', 'summary-block');
+        
+        const summaryTitle = document.createElement('h3');
+        summaryTitle.textContent = "7) Grand Total Validation";
+        finalSummaryBlock.appendChild(summaryTitle);
+        
+        const summaryContentWrapper = document.createElement('div');
+        summaryContentWrapper.className = 'data-block-content';
+        
+        // --- Calculate Validation Values ---
+        const dneCharge = calculateDemandNoticeCharge(record);
+        const snapshotTotal = calculateTotalCharges(record); 
+        const sumOfComponents = sec138Totals.subtotal + sec09Totals.subtotal + dneCharge;
+        
+        // Add component rows
+        summaryContentWrapper.innerHTML += createSummaryRow("Section 138 Grand Subtotal Net", sec138Totals.subtotal, 'primary', 'info');
+        summaryContentWrapper.innerHTML += createSummaryRow("Section 09 Grand Subtotal Net", sec09Totals.subtotal, 'primary', 'info');
+        summaryContentWrapper.innerHTML += createSummaryRow("Demand Notice Expense Net", dneCharge, 'danger', 'info');
+
+        // Add calculated total (for visual check)
+        summaryContentWrapper.innerHTML += createSummaryRow("CALCULATED GRAND TOTAL (138 Net + 09 Net + DNE)", sumOfComponents, 'success', 'validation');
+        
+        // Add snapshot total for comparison
+        summaryContentWrapper.innerHTML += createSummaryRow("TOTAL CHARGES (Snapshot Box Value)", snapshotTotal, 'total-color', 'validation');
+
+        finalSummaryBlock.appendChild(summaryContentWrapper);
+        DATA_BLOCKS_CONTAINER.appendChild(finalSummaryBlock);
+    }
 }
 
 
