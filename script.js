@@ -450,7 +450,7 @@ function displayLoan() {
 }
 
 
-// Function to format and render the snapshot box (Updated to call the corrected helper)
+// Function to format and render the snapshot box (Unchanged)
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = ''; 
 
@@ -487,7 +487,7 @@ function renderSnapshot(record) {
 }
 
 
-// RENDER BLOCKS FUNCTION (Unchanged logic, uses updated constants for formatting)
+// RENDER BLOCKS FUNCTION - **MODIFIED SUBTOTAL LOGIC**
 function renderBlocks(record) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
@@ -580,11 +580,14 @@ function renderBlocks(record) {
             contentWrapper.appendChild(item);
         });
 
-        // NEW: Add subtotals for Blocks 5 and 6
+        // NEW: Add the three-tier subtotals for Blocks 5 and 6
         if (blockNumber === 5 || blockNumber === 6) {
             
-            // --- 1. Advocate Fee Subtotal Row (Always shown in fees blocks) ---
+            // Calculate the two base subtotals
             const advocateFees = calculateAdvocateFees(record, sectionAdvocateFields, sectionTDSFields);
+            const totals = calculateSectionSubtotals(record, sectionChargeFields, sectionTDSFields);
+
+            // --- 1. ADVOCATE FEE NET (Always shown in fees blocks) ---
             const formattedAdvocateSubtotal = advocateFees.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
             
             const advSubtotalItem = document.createElement('div');
@@ -595,17 +598,35 @@ function renderBlocks(record) {
             `;
             contentWrapper.appendChild(advSubtotalItem);
             
-            // --- 2. Full Section Subtotal Row (Hidden if advocate-only toggle is ON) ---
-            const totals = calculateSectionSubtotals(record, sectionChargeFields, sectionTDSFields);
-            const formattedSubtotal = totals.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
             if (!showAdvocateOnly) {
+                 // --- 2. OTHER CHARGES NET ---
+                const otherChargesNet = totals.subtotal - advocateFees.subtotal;
+                const formattedOtherChargesNet = otherChargesNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+                
+                const otherSubtotalItem = document.createElement('div');
+                otherSubtotalItem.className = 'data-block-item subtotal-row other-subtotal';
+                otherSubtotalItem.innerHTML = `
+                    <span class="item-label">OTHER CHARGES NET:</span>
+                    <span class="item-value">${formattedOtherChargesNet}</span>
+                `;
+                // Add a divider line style for visual separation from Advocate Fee
+                otherSubtotalItem.style.borderTop = '1px dashed #ced4da'; 
+                otherSubtotalItem.style.marginBottom = '0';
+                otherSubtotalItem.style.backgroundColor = 'transparent';
+                otherSubtotalItem.querySelector('.item-value').classList.remove('critical-value');
+                contentWrapper.appendChild(otherSubtotalItem);
+
+                // --- 3. SECTION SUBTOTAL (GRAND TOTAL) ---
+                const formattedSubtotal = totals.subtotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
                 const subtotalItem = document.createElement('div');
                 subtotalItem.className = 'data-block-item subtotal-row section-subtotal';
                 subtotalItem.innerHTML = `
-                    <span class="item-label">SECTION SUBTOTAL (All Charges - All TDS):</span>
+                    <span class="item-label">SECTION GRAND SUBTOTAL (All Charges - All TDS):</span>
                     <span class="item-value critical-value">${formattedSubtotal}</span>
                 `;
+                // Remove the top border from the new style to use the dashed line above it
+                subtotalItem.style.borderTop = 'none'; 
                 contentWrapper.appendChild(subtotalItem);
             }
         }
