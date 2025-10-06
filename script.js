@@ -463,60 +463,78 @@ function renderStatusTag(statusValue, loanNo) {
 function handleStatusClick(element) {
     const loanNo = element.dataset.loanNo;
     const currentStatus = element.dataset.currentStatus;
+    const tdElement = element.parentNode; // The TD element containing the status
 
     // 1. Ask for password
     const password = prompt("Enter password to change status:");
 
     if (password === CLIENT_SIDE_AUTH_KEY) { // CLIENT_SIDE_AUTH_KEY is "123"
         // 2. Password accepted, enable edit
-        enableStatusEdit(element.parentNode, loanNo, currentStatus);
+        enableStatusEdit(tdElement, loanNo, currentStatus);
     } else if (password !== null && password !== '') { 
         alert("Incorrect password. Status update aborted.");
     }
 }
 
-// 4.2. Replace tag with dropdown
+// 4.2. Replace tag with dropdown and buttons
 function enableStatusEdit(tdElement, loanNo, currentStatus) {
-    let selectHTML = `<select class="status-select" data-loan-no="${loanNo}" onchange="saveNewStatus(this)">`;
+    let selectHTML = `<div class="status-edit-mode">`;
     
-    // Add the disabled initial option as per user request to ensure selection happens
-    selectHTML += `<option value="" disabled selected>Change Status...</option>`; 
-
+    // Dropdown for status selection
+    selectHTML += `<select id="status-select-${loanNo}" class="status-select" data-loan-no="${loanNo}">`;
+    
     STATUS_OPTIONS.forEach(option => {
-        // Set the currently saved status as selected
+        // Ensure the currently saved status is the default selected value
         const isSelected = option === currentStatus ? 'selected' : '';
         selectHTML += `<option value="${option}" ${isSelected}>${option}</option>`;
     });
 
     selectHTML += `</select>`;
     
-    // Replace the content of the <td> with the select dropdown
+    // Add Save and Cancel buttons, passing necessary data
+    selectHTML += `
+        <div class="status-buttons">
+            <button class="status-save-btn" onclick="confirmSaveStatus('${loanNo}', '${currentStatus}')">Save</button>
+            <button class="status-cancel-btn" onclick="cancelStatusEdit(document.getElementById('status-cell-${loanNo}'), '${currentStatus}', '${loanNo}')">Cancel</button>
+        </div>
+    </div>`;
+    
+    // Replace the content of the <td> with the edit interface
     tdElement.innerHTML = selectHTML;
 }
 
-// 4.3. Save new status and revert to disabled state
-async function saveNewStatus(selectElement) {
-    const loanNo = selectElement.dataset.loanNo;
+// 4.3. Function to revert to the disabled state without saving
+function cancelStatusEdit(tdElement, originalStatus, loanNo) {
+    // Revert the TD's content back to the original disabled tag
+    tdElement.innerHTML = renderStatusTag(originalStatus, loanNo);
+}
+
+// 4.4. Save new status and trigger full reload/re-render
+async function confirmSaveStatus(loanNo, originalStatus) {
+    const selectElement = document.getElementById(`status-select-${loanNo}`);
     const newStatus = selectElement.value;
+    const tdElement = document.getElementById(`status-cell-${loanNo}`);
     
-    if (!newStatus) {
-        // If the user selects the disabled placeholder, re-render immediately
-        const advocate = ADVOCATE_TRACKER_SELECT.value;
-        if(advocate) displayAdvocateSummary(advocate);
+    if (newStatus === originalStatus) {
+        alert("Status is unchanged. Aborting save.");
+        cancelStatusEdit(tdElement, originalStatus, loanNo);
         return;
     }
 
-    const tdElement = selectElement.parentNode;
-    tdElement.innerHTML = 'Saving...'; 
+    if (!newStatus) {
+        alert("Please select a valid status.");
+        return;
+    }
+
+    // Display saving status before API call
+    tdElement.innerHTML = `<span class="status-saving">Saving...</span>`; 
     
-    // The status field column name
     const headerName = STATUS_FIELD; 
 
-    // Data to send for updating the row identified by "Loan No"
     const dataToSend = {
         [headerName]: newStatus,
-        "Loan No": loanNo, // Crucial field to identify the row to update
-        "authKey": CLIENT_SIDE_AUTH_KEY // Hardcoded password "123" for submission
+        "Loan No": loanNo, 
+        "authKey": CLIENT_SIDE_AUTH_KEY 
     };
 
     try {
@@ -532,24 +550,24 @@ async function saveNewStatus(selectElement) {
         const result = await response.json();
 
         if (result.status === 'success') {
-            // Alert is intrusive, but confirms the action for the user
             alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
-            // Reload all data and re-render the summary to revert to the disabled state
+            
+            // Reload all data and re-render the summary to update the display
             await initialLoad(); 
-            displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value, ALL_RECORDS);
+            displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value); 
         } else {
             alert(`❌ Submission Error for Loan ${loanNo}: ${result.message}`);
-            // If submission fails, re-render the summary to revert to the disabled state
-            displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value, ALL_RECORDS);
+            // On failure, revert back to the original status tag
+            cancelStatusEdit(tdElement, originalStatus, loanNo);
         }
 
     } catch (error) {
         console.error("Error saving status:", error);
         alert(`❌ Network Error while saving status for Loan ${loanNo}.`);
-        displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value, ALL_RECORDS);
+        // On failure, revert back to the original status tag
+        cancelStatusEdit(tdElement, originalStatus, loanNo);
     }
 }
-
 
 // 4. ADVOCATE TRACKER DISPLAY LOGIC
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
