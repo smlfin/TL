@@ -98,21 +98,20 @@ const parseNumber = (value) => {
  * @returns {string} The status value or 'N/A'.
  */
 // NEW HELPER: Get the correct payment status for the tracker view
+// Function: getAdvocatePaymentStatusForTracker
 function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
     if (!record || !currentAdvocate) return 'N/A';
     
     const normalizedAdvocate = String(currentAdvocate).trim();
     
-    // If the advocate is the primary 'ADVOCATE' (Section 138) -> Store in BO
+    // If the advocate is the primary 'ADVOCATE' -> Read status from the '138 Payment' column
     if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-        // *** CHANGE: Use 'BO' column for primary Advocate status ***
-        return record['BO'] || 'Processing';
+        return record['138 Payment'] || 'Processing';
     } 
     
-    // If the advocate is the secondary 'Sec/9 Advocate' (Section 9) -> Store in BP
+    // If the advocate is the secondary 'Sec/9 Advocate' -> Read status from the 'sec9 Payment' column
     if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-        // *** CHANGE: Use 'BP' column for Sec/9 Advocate status ***
-        return record['BP'] || 'Processing';
+        return record['sec9 Payment'] || 'Processing';
     }
     
     return 'N/A'; // Advocate not associated with this record
@@ -784,10 +783,9 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
     revertToTag(tdElement, originalStatus, loanNo, advocateName);
 }
 
-// ====================================================================
+
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
-// ====================================================================
-// ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
+
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const sel = tdElement.querySelector('.status-select');
     const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
@@ -800,20 +798,20 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         return;
     }
 
-    // --- CRITICAL LOGIC: Determine the target payment column (BO or BP) ---
+    // --- CRITICAL FIX: Determine the actual COLUMN HEADER ---
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
     let targetColumn = '';
     
     if (record) {
         const normalizedAdvocate = currentAdvocate.trim();
         
-        // 1. If the current advocate is the primary 'ADVOCATE', use 'BO'
+        // 1. If the current advocate is the primary 'ADVOCATE' (BO), use '138 Payment'
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = 'BO'; // *** UPDATED TO BO ***
+            targetColumn = '138 Payment'; // <-- FIX: Use actual BO column header
         } 
-        // 2. If the current advocate is the secondary 'Sec/9 Advocate', use 'BP'
+        // 2. If the current advocate is the secondary 'Sec/9 Advocate' (BP), use 'sec9 Payment'
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'BP'; // *** UPDATED TO BP ***
+            targetColumn = 'sec9 Payment'; // <-- FIX: Use actual BP column header
         }
     }
     
@@ -823,11 +821,12 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         return;
     }
 
-    // 2. Build the payload using the determined column name (targetColumn)
+    // 2. Build the payload using the determined actual column header (targetColumn)
     const dataToSend = {
+        // This will be {"138 Payment": "New Status"} or {"sec9 Payment": "New Status"}
         [targetColumn]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, 
+        "ADVOCATE_ID": currentAdvocate, // Used for row matching
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
 
@@ -847,6 +846,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
             // Update local cache and display
             const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
             if (updatedRecord) {
+                // Update the correct column in the cache (e.g., updatedRecord['138 Payment'] = 'Paid')
                 updatedRecord[targetColumn] = newStatus;
             }
             revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
@@ -860,6 +860,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
+
 // 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
