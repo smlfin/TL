@@ -534,8 +534,11 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
     revertToTag(tdElement, originalStatus, loanNo, advocateName);
 }
 
-// 4.4. Save new status and trigger full reload/re-render (Fixed Logic)
+// ====================================================================
+// 4.4. Save new status and trigger full reload/re-render (With Error Reversion)
+// ====================================================================
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
+    // Get the original status value for rollback on failure
     const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
 
     if (newStatus === originalStatus) {
@@ -573,26 +576,27 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result.status === 'success') {
+            // SUCCESS: The data should now be permanently in the Google Sheet.
             alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. The page will now reload all data to confirm the change.`);
             
-            // --- FIX: Call initialLoad() to force a full data re-fetch from the server ---
-            // This ensures the local ALL_RECORDS cache is updated with the permanent change.
+            // Force a full data re-fetch from the server, which now has the permanent data
             initialLoad();
             
         } else {
-            alert(`❌ Submission Error for Loan ${loanNo}: ${result.message}`);
-            // On failure, revert back to the original status tag
+            // FAILURE: The server returned a specific error message.
+            alert(`❌ Submission Error for Loan ${loanNo}: ${result.message || 'Server returned non-success status.'}. Status reverted.`);
+            // On failure, revert back to the original status tag immediately
             revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
         }
 
     } catch (error) {
+        // CATCH: A network connection or other non-API error occurred.
         console.error("Error saving status:", error);
-        alert(`❌ Network Error while saving status for Loan ${loanNo}.`);
-        // On failure, revert back to the original status tag
+        alert(`❌ Network Error while saving status for Loan ${loanNo}. Status reverted.`);
+        // On network failure, revert back to the original status tag
         revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
     }
 }
-
 
 // 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
