@@ -698,11 +698,12 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     // Get the original status value for rollback on failure
     const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
+    const currentAdvocate = ADVOCATE_TRACKER_SELECT.value; // Store the advocate name
 
     if (newStatus === originalStatus) {
         alert("Status is unchanged. Aborting save.");
         // Assuming cancelStatusEdit reverts the UI element to its original state
-        cancelStatusEdit(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+        cancelStatusEdit(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
     }
 
@@ -719,7 +720,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const dataToSend = {
         [headerName]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE": ADVOCATE_TRACKER_SELECT.value, // <--- CRITICAL FIX: Included advocate's name
+        "ADVOCATE": currentAdvocate, // Used the stored value
         "authKey": CLIENT_SIDE_AUTH_KEY
     };
 
@@ -733,38 +734,38 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
             body: JSON.stringify(dataToSend)
         });
 
-        // --- ENHANCED ERROR CHECK ---
-        // 1. Check for bad HTTP status (e.g., 500, 404) before trying to parse JSON.
+        // 1. Check for bad HTTP status (e.g., 500, 404)
         if (!response.ok) {
-            // Throwing an error here jumps directly to the 'catch' block below
             const errorText = await response.text();
-            throw new Error(`Server returned HTTP ${response.status}: ${errorText.substring(0, 100)}...`);
+            throw new Error(`Server returned HTTP ${response.status}.`);
         }
-        // -----------------------------
 
         const result = await response.json();
 
         if (result.status === 'success') {
             // SUCCESS: The data should now be permanently in the Google Sheet.
-            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. The page will now reload all data to confirm the change.`);
+            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. Reloading data...`);
             
-            // Force a full data re-fetch from the server
-            initialLoad();
+            // 2. Force a full data re-fetch from the server
+            await initialLoad();
+            
+            // 3. CRITICAL ADDITION: Immediately redraw the advocate tracker table with fresh data
+            renderAdvocateSummary(currentAdvocate); 
             
         } else {
-            // FAILURE: The server returned a specific error message (e.g., failed to write to sheet).
+            // FAILURE: The server returned a specific error message.
             alert(`❌ Submission Error for Loan ${loanNo}: ${result.message || 'Server returned non-success status.'}. Status reverted.`);
             // On failure, revert back to the original status tag immediately
-            revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+            revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
 
     } catch (error) {
-        // CATCH: A network connection, timeout, or bad HTTP status error occurred (thrown above).
+        // CATCH: A network connection, timeout, or bad HTTP status error occurred.
         console.error("Error saving status:", error);
         alert(`❌ Network or Server Error while saving status for Loan ${loanNo}. Status reverted.`);
         
         // On network/critical failure, revert back to the original status tag
-        revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
 
