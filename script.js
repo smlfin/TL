@@ -78,36 +78,30 @@ const parseNumber = (value) => {
 };
 
 // Function to calculate net total for any group of charges 
-// (Used for Other Charges and Snapshot Total - adds all non-TDS fields, subtracts TDS)
 function calculateChargesNet(record, fields) {
     let total = 0;
     
     fields.forEach(field => {
         let sign = 1; 
 
-        // Check for TDS (Tax Deducted at Source) fields which should be subtracted
         if (field.includes("TDS")) {
             sign = -1;
         }
         
         const value = record[field];
-        // Use parseNumber here, which is critical for robustness against non-numeric inputs
         total += parseNumber(value) * sign;
     });
 
     return total;
 }
 
-// NEW Function to calculate the required Advocate Fee Payment Net 
-// (Fee - TDS, EXCLUDING GST - used for Advocate Fee Net and Tracker)
+// Function to calculate the required Advocate Fee Payment Net 
 function calculateAdvocateFeePaymentNet(record, feeNetFields) {
     let total = 0;
     
-    // feeNetFields is explicitly defined to contain only Fee and TDS fields.
     feeNetFields.forEach(field => {
         let sign = 1; 
 
-        // Check for TDS fields which should be subtracted
         if (field.includes("TDS")) {
             sign = -1;
         }
@@ -179,7 +173,7 @@ const CHARGE_DEFINITIONS_09 = {
     ]
 };
 
-// All Charge Fields for Snapshot Box Total (Must include Demand Notice Expense)
+// All Charge Fields for Snapshot Box Total
 const CHARGE_FIELDS_FOR_SNAPSHOT = [
     "Demand Notice Expense",
     ...CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay,
@@ -190,26 +184,24 @@ const CHARGE_FIELDS_FOR_SNAPSHOT = [
 
 // Helper function to calculate the total for the Snapshot Box
 function calculateTotalCharges(record) {
-    // Snapshot Total is a sum of ALL charges (positive and negative, like TDS)
     return calculateChargesNet(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
 }
 
 
 // API URL now points to the Netlify Function proxy
 const API_URL = "/.netlify/functions/fetch-data"; 
-const API_URL_UPDATE = "/.netlify/functions/update-data"; // Assuming a separate endpoint for updates
 const CLIENT_SIDE_AUTH_KEY = "123"; 
 
 let ALL_RECORDS = []; 
 window.CURRENT_LOAN_RECORD = null;
 
 // NEW DEFINITIONS FOR ADVOCATE TRACKER STATUS
-const STATUS_FIELD = "Advocate Payment Status"; // Assuming this is the column name in the sheet
-const STATUS_OPTIONS = ["Paid", "Processing", "Rejected"];
-
+const STATUS_FIELD = "Advocate Payment Status";
+const STATUS_OPTIONS = ["Processing", "Rejected", "Paid"]; 
 
 // --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
+    // ... (omitted for brevity, assume correct structure)
     {
         title: "1) Customer & Loan Details",
         fields: {
@@ -266,7 +258,6 @@ const DISPLAY_BLOCKS = [
             "Attachment eff Date": "Attachment eff Date",
         }
     },
-    // --- BLOCK 5: Section 138 Fee & Charges (All Fields) ---
     {
         title: "5) Section 138 Fee & Charges",
         fields: {
@@ -282,7 +273,6 @@ const DISPLAY_BLOCKS = [
             "Warrant Steps of Sec 138": "Warrant Steps",
         }
     },
-    // --- BLOCK 6: Section 09 Fee & Charges (All Fields) ---
     {
         title: "6) Section 09 Fee & Charges",
         fields: {
@@ -304,6 +294,13 @@ const DISPLAY_BLOCKS = [
     }
 ];
 
+// Helper function to format currency for the table
+function formatCurrency(value) {
+    const number = parseNumber(value);
+    if (isNaN(number)) return 'N/A';
+    return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+}
+
 
 // --- DOM ELEMENTS ---
 const FORM = document.getElementById('record-form');
@@ -317,7 +314,6 @@ const SEARCH_BUTTON = document.getElementById('search-button');
 const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
-const DISPLAY_LOAN_NO = document.getElementById('display-loan-no');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
 const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
 const HEADER_INPUT = document.getElementById('header_name'); 
@@ -330,47 +326,49 @@ const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 
 
-// 1. INITIAL FETCH AND DROPDOWN POPULATION (Modified to include advocate list population)
+// 1. INITIAL FETCH AND DROPDOWN POPULATION (Robust Fix)
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 async function initialLoad() {
-    LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns...';
+    LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns... (This may take a moment)';
     try {
         const response = await fetch(API_URL, {
             method: 'GET',
             mode: 'cors' 
         });
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
 
         if (result.status === 'success' && result.data && result.data.length > 0) {
             ALL_RECORDS = result.data;
             populateBranchDropdown(ALL_RECORDS);
-            populateAdvocateDropdown(ALL_RECORDS); // NEW: Populate advocate list
-            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. to view file details, or use the Advocate Tracker.';
+            populateAdvocateDropdown(ALL_RECORDS); 
             
-            // If an advocate was previously selected, re-render the summary
-            if (ADVOCATE_TRACKER_SELECT.value) {
-                 displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value);
-            }
-
+            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. to view file details, or use the Advocate Tracker.';
         } else {
-            LOADING_STATUS.textContent = '❌ Error: Could not load data from the server.';
+            LOADING_STATUS.textContent = '❌ Error: Could not load data. Server returned success but data was empty.';
             BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
+            ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
         }
 
     } catch (error) {
         console.error("Error fetching data:", error);
-        LOADING_STATUS.textContent = '❌ Network Error. Could not connect to API.';
+        LOADING_STATUS.textContent = `❌ Network Error or Invalid API URL: ${error.message}`;
+        BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
+        ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
     }
 }
 
 function populateBranchDropdown(records) {
     const branches = new Set();
     records.forEach(record => {
-        const branchName = record["Loan Branch"];
-        if (branchName && String(branchName).trim() !== '') {
-            branches.add(String(branchName).trim());
+        const branchName = String(record["Loan Branch"] || '').trim();
+        if (branchName && branchName !== 'N/A' && branchName !== '') {
+            branches.add(branchName);
         }
     });
 
@@ -386,32 +384,291 @@ function populateBranchDropdown(records) {
     BRANCH_SELECT.disabled = false;
 }
 
-// Populate Advocate Dropdown
 function populateAdvocateDropdown(records) {
     const advocates = new Set();
+    const currentlySelected = ADVOCATE_TRACKER_SELECT.value;
+
     records.forEach(record => {
-        const adv138 = String(record["ADVOCATE"]).trim();
-        const adv09 = String(record["Sec/9 Advocate"]).trim();
-        
-        // Collect from ADVOCATE (Sec 138)
+        const adv138 = String(record["ADVOCATE"] || '').trim();
         if (adv138 && adv138 !== 'N/A' && adv138 !== '') {
             advocates.add(adv138);
         }
-        // Collect from Sec/9 Advocate (Sec 09)
+        const adv09 = String(record["Sec/9 Advocate"] || '').trim();
         if (adv09 && adv09 !== 'N/A' && adv09 !== '') {
             advocates.add(adv09);
         }
     });
 
-    ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="" selected disabled>-- Select Advocate --</option>';
+    ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="" disabled>-- Select Advocate --</option>';
     
     [...advocates].sort().forEach(advocate => {
         const option = document.createElement('option');
         option.value = advocate;
         option.textContent = advocate;
+        if (advocate === currentlySelected) {
+            option.selected = true;
+        }
         ADVOCATE_TRACKER_SELECT.appendChild(option);
     });
+    
+    if (!currentlySelected || advocates.size === 0) {
+        ADVOCATE_TRACKER_SELECT.querySelector('option[disabled]').selected = true;
+    }
+
     ADVOCATE_TRACKER_SELECT.disabled = false;
+    
+    if (currentlySelected && advocates.has(currentlySelected)) {
+         displayAdvocateSummary(currentlySelected); 
+    }
+}
+
+
+// --- ADVOCATE TRACKER STATUS LOGIC ---
+
+// Helper to determine CSS class for status tag
+function getStatusClassName(status) {
+    const s = status.toLowerCase();
+    if (s === 'paid') return 'status-paid';
+    if (s === 'processing') return 'status-processing';
+    if (s === 'rejected') return 'status-rejected';
+    return 'status-unset';
+}
+
+// Function to convert the cell content back to the disabled tag (Final State)
+function revertToTag(tdElement, newStatus, loanNo, advocateName) {
+    const statusClass = getStatusClassName(newStatus);
+    
+    // HTML content for the disabled tag with the Edit option
+    const htmlContent = `
+        <div class="status-tag ${statusClass}">
+            ${newStatus}
+            <span class="edit-icon" 
+                  data-loan-no="${loanNo}" 
+                  data-advocate="${advocateName}" 
+                  data-current-status="${newStatus}"
+                  title="Click to edit status (password required)">
+                ✍️ Edit
+            </span>
+        </div>
+    `;
+
+    if (tdElement) {
+        tdElement.innerHTML = htmlContent;
+        
+        // Re-attach listener to the newly created Edit icon
+        const editIcon = tdElement.querySelector('.edit-icon');
+        if (editIcon) {
+            editIcon.addEventListener('click', function() {
+                showPasscodePopup(this);
+            });
+        }
+        return;
+    }
+    
+    // Used during initial table render
+    return htmlContent;
+}
+
+// 4.1. Handle the initial click (The password step)
+function showPasscodePopup(iconElement) {
+    const loanNo = iconElement.dataset.loanNo;
+    const currentStatus = iconElement.dataset.currentStatus;
+    const tdElement = iconElement.closest('.status-cell'); 
+    const advocateName = iconElement.dataset.advocate;
+
+    // 1. Ask for password
+    const password = prompt("Enter password to change status:");
+
+    if (password === CLIENT_SIDE_AUTH_KEY) { 
+        // 2. Password accepted, enable edit
+        enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName);
+    } else if (password !== null && password !== '') { 
+        alert("Incorrect password. Status update aborted.");
+    }
+}
+
+// 4.2. Replace tag with dropdown and buttons
+function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
+    let selectHTML = `<div class="status-edit-mode">`;
+    
+    // Dropdown for status selection
+    selectHTML += `<select id="status-select-${loanNo}" class="status-select" data-original-status="${currentStatus}">`;
+    
+    STATUS_OPTIONS.forEach(option => {
+        const isSelected = option === currentStatus ? 'selected' : '';
+        selectHTML += `<option value="${option}" ${isSelected}>${option}</option>`;
+    });
+
+    selectHTML += `</select>`;
+    
+    // Add Save and Cancel buttons
+    selectHTML += `
+        <div class="status-buttons">
+            <button class="status-save-btn" onclick="confirmSaveStatus('${loanNo}', document.getElementById('status-select-${loanNo}').value, document.getElementById('status-cell-${loanNo}'))">Save</button>
+            <button class="status-cancel-btn" onclick="cancelStatusEdit(document.getElementById('status-cell-${loanNo}'), '${currentStatus}', '${loanNo}', '${advocateName}')">Cancel</button>
+        </div>
+    </div>`;
+    
+    tdElement.innerHTML = selectHTML;
+}
+
+
+// 4.3. Function to revert to the disabled state without saving
+function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
+    revertToTag(tdElement, originalStatus, loanNo, advocateName);
+}
+
+// 4.4. Save new status and trigger full reload/re-render (Fixed Logic)
+async function confirmSaveStatus(loanNo, newStatus, tdElement) {
+    const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
+
+    if (newStatus === originalStatus) {
+        alert("Status is unchanged. Aborting save.");
+        cancelStatusEdit(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+        return;
+    }
+
+    if (!newStatus) {
+        alert("Please select a valid status.");
+        return;
+    }
+
+    // Display saving status before API call
+    tdElement.innerHTML = `<span class="status-saving">Saving...</span>`; 
+    
+    const headerName = STATUS_FIELD; 
+
+    const dataToSend = {
+        [headerName]: newStatus,
+        "Loan No": loanNo, 
+        "authKey": CLIENT_SIDE_AUTH_KEY 
+    };
+
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            mode: 'cors', 
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(dataToSend)
+        });
+
+        const result = await response.json();
+
+        if (result.status === 'success') {
+            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
+            
+            // 1. Find and **optimistically update the local ALL_RECORDS cache** immediately.
+            const recordIndex = ALL_RECORDS.findIndex(record => String(record["Loan No"]).trim() === loanNo);
+            if (recordIndex !== -1) {
+                ALL_RECORDS[recordIndex][STATUS_FIELD] = newStatus;
+            }
+            
+            // 2. Re-render the entire summary table using the now-updated local cache.
+            const advocateName = ADVOCATE_TRACKER_SELECT.value; 
+            if (advocateName) {
+                displayAdvocateSummary(advocateName); 
+            }
+            
+        } else {
+            alert(`❌ Submission Error for Loan ${loanNo}: ${result.message}`);
+            // On failure, revert back to the original status tag
+            revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+        }
+
+    } catch (error) {
+        console.error("Error saving status:", error);
+        alert(`❌ Network Error while saving status for Loan ${loanNo}.`);
+        // On failure, revert back to the original status tag
+        revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
+    }
+}
+
+
+// 3. ADVOCATE TRACKER DISPLAY LOGIC
+ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
+
+function displayAdvocateSummary(selectedAdvocate) {
+    
+    if (!selectedAdvocate) {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+        return;
+    }
+
+    const filteredRecords = ALL_RECORDS.filter(record => 
+        String(record["ADVOCATE"] || '').trim() === selectedAdvocate ||
+        String(record["Sec/9 Advocate"] || '').trim() === selectedAdvocate
+    );
+    
+    if (filteredRecords.length === 0) {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No payment records found for Advocate: ${selectedAdvocate}.</p>`;
+        return;
+    }
+
+    let tableHTML = `
+        <table class="advocate-summary-table">
+            <thead>
+                <tr>
+                    <th>Loan No</th>
+                    <th>Customer Name</th>
+                    <th>Sections</th>
+                    <th>${STATUS_FIELD}</th>
+                    <th class="right-align">Total Fee Net</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+    
+    let grandTotalNet = 0;
+
+    filteredRecords.forEach(record => {
+        const loanNo = record["Loan No"];
+        const custName = record["Customer Name"] || 'N/A';
+        const statusValue = record[STATUS_FIELD] || 'Processing'; 
+        
+        const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+        const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+        const totalFeeNet = feeNet138 + feeNet09;
+        
+        grandTotalNet += totalFeeNet;
+        
+        const sections = [];
+        if (String(record["ADVOCATE"] || '').trim() === selectedAdvocate) sections.push("Sec 138");
+        if (String(record["Sec/9 Advocate"] || '').trim() === selectedAdvocate) sections.push("Sec 09");
+
+        tableHTML += `
+            <tr id="row-${loanNo}">
+                <td data-label="Loan No">${loanNo}</td>
+                <td data-label="Customer Name">${custName}</td>
+                <td data-label="Sections">${sections.join(' & ')}</td>
+                <td data-label="Status" id="status-cell-${loanNo}" class="status-cell">
+                    ${revertToTag(null, statusValue, loanNo, selectedAdvocate)}
+                </td>
+                <td data-label="Total Net" class="right-align">${formatCurrency(totalFeeNet)}</td>
+            </tr>
+        `;
+    });
+
+    tableHTML += `
+            <tr class="grand-total-row">
+                <td colspan="4" style="text-align: right; font-weight: 700;">GRAND TOTAL (NET):</td>
+                <td style="font-weight: 700; color: var(--color-primary);" class="right-align">${formatCurrency(grandTotalNet)}</td>
+            </tr>
+        </tbody>
+    </table>
+    `;
+
+    ADVOCATE_PAYMENTS_VIEW.innerHTML = tableHTML;
+    
+    // Re-attach listeners to the new edit icons
+    document.querySelectorAll('.edit-icon').forEach(icon => {
+        icon.addEventListener('click', function() {
+            showPasscodePopup(this);
+        });
+    });
+
+    LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
 }
 
 
@@ -424,7 +681,6 @@ LOAN_SELECT.addEventListener('change', () => {
 
 function populateLoanDropdown() {
     const selectedBranch = BRANCH_SELECT.value;
-    
     LOAN_SELECT.innerHTML = '<option value="" selected disabled>-- Select Loan No --</option>';
     LOAN_SELECT.disabled = true;
     SEARCH_BUTTON.disabled = true;
@@ -434,11 +690,11 @@ function populateLoanDropdown() {
     }
 
     const loans = ALL_RECORDS
-        .filter(record => String(record["Loan Branch"]).trim() === selectedBranch)
-        .map(record => String(record["Loan No"]).trim());
+        .filter(record => String(record["Loan Branch"] || '').trim() === selectedBranch)
+        .map(record => String(record["Loan No"] || '').trim());
 
     const uniqueLoans = new Set(loans);
-    
+
     [...uniqueLoans].sort().forEach(loanNo => {
         const option = document.createElement('option');
         option.value = loanNo;
@@ -450,14 +706,12 @@ function populateLoanDropdown() {
     LOADING_STATUS.textContent = `Loan Nos loaded. Select one.`;
 }
 
-
 // 3. DISPLAY LOGIC (Search Button Click)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
 
 function displayLoan() {
     const loanNo = LOAN_SELECT.value;
     const selectedBranch = BRANCH_SELECT.value;
-
     if (!loanNo || !selectedBranch) {
         LOADING_STATUS.textContent = 'Please select both a Branch and a Loan No.';
         return;
@@ -466,8 +720,8 @@ function displayLoan() {
     LOADING_STATUS.textContent = `Displaying data for Loan No: ${loanNo}...`;
 
     const record = ALL_RECORDS.find(r => 
-        String(r["Loan Branch"]).trim() === selectedBranch && 
-        String(r["Loan No"]).trim() === loanNo
+        String(r["Loan Branch"] || '').trim() === selectedBranch && 
+        String(r["Loan No"] || '').trim() === loanNo 
     );
 
     DATA_VIEW_SECTION.style.display = 'block';
@@ -476,11 +730,8 @@ function displayLoan() {
     if (record) {
         window.CURRENT_LOAN_RECORD = record;
         renderSnapshot(record);
-        // Render blocks based on current toggle state
         renderFilteredBlocks(record, ADVOCATE_FEE_TOGGLE.checked);
-        // Show the toggle container
         ADVOCATE_FEE_CONTROLS.style.display = 'flex';
-        // Add accordion listeners after blocks are rendered
         addAccordionListeners();
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
     } else {
@@ -497,7 +748,6 @@ function displayLoan() {
 function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = '';
 
-    // Helper to get formatted currency string from a sheet header
     const getFormattedCurrency = (sheetHeader) => {
         let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
         const number = parseNumber(value);
@@ -505,7 +755,6 @@ function renderSnapshot(record) {
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Calculate Total Charges
     const rawTotalCharges = calculateTotalCharges(record);
     const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -525,7 +774,6 @@ function renderSnapshot(record) {
             </div>
         `;
     });
-
     SNAPSHOT_BOX.innerHTML = snapshotHTML;
 }
 
@@ -555,426 +803,151 @@ function renderDataItem(sheetHeader, displayName, value) {
 function processValue(record, sheetHeader) {
     let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
 
-    // Apply date formatting
-    if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
-        value = formatDate(value);
+    if (DATE_FIELDS.includes(sheetHeader)) {
+        return formatDate(value);
     }
 
-    // Apply currency formatting ONLY for display in the blocks
-    if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
-        const number = parseNumber(value);
-        value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    }
-
-    return value;
-}
-
-// Helper to create a subtotal row DOM element
-function createSubtotalRow(label, value, className) {
-    const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    
-    const subtotalItem = document.createElement('div');
-    subtotalItem.className = `data-block-item ${className}`;
-
-    const totalLabelSpan = document.createElement('span');
-    totalLabelSpan.className = 'item-label';
-    totalLabelSpan.textContent = label;
-
-    const totalValueSpan = document.createElement('span');
-    totalValueSpan.className = 'item-value';
-    totalValueSpan.textContent = formattedValue;
-    
-    subtotalItem.appendChild(totalLabelSpan);
-    subtotalItem.appendChild(totalValueSpan);
-    return subtotalItem;
-}
-
-// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION (Fixes Accordion and Blocks 5/6) ---
-function renderFilteredBlocks(record, isAdvocateFeeOnly) {
-    DATA_BLOCKS_CONTAINER.innerHTML = '';
-    DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-
-    const blockElements = {};
-
-    DISPLAY_BLOCKS.forEach((blockConfig, index) => {
-        const block = document.createElement('div');
-        const blockNumber = index + 1;
-        block.id = `block-${blockNumber}`;
-        block.classList.add('data-block');
+    if (sheetHeader.includes("Amount") || sheetHeader.includes("Balance") || sheetHeader.includes("Fee") || sheetHeader.includes("Expense") || sheetHeader.includes("Charges") || sheetHeader.includes("Amt") || sheetHeader.includes("TDS") || sheetHeader.includes("GST") || sheetHeader.includes("Paid") || sheetHeader.includes("EMI")) {
+        if (value === 'N/A' || value === '' || parseNumber(value) === 0) {
+             return 'N/A';
+        }
         
-        const isChargeBlock = blockNumber === 5 || blockNumber === 6;
-        const isCollapsible = blockNumber >= 1 && blockNumber <= 4; // Blocks 1-4 are collapsible
-
-        // Add layout classes
-        if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) {
-            block.classList.add('horizontal-grid');
-        } else if (blockNumber === 2 || blockNumber === 4) {
-            block.classList.add('vertical-list');
+        const number = parseNumber(value);
+        let displayClass = '';
+        if (sheetHeader.includes("TDS")) {
+            displayClass = 'minus-value';
         }
 
-        // --- Block Header ---
-        const header = document.createElement('div');
-        header.classList.add('block-header');
-        if (isCollapsible) {
-            header.classList.add('accordion-header', 'collapsed'); // Start collapsed
-        }
-        const title = document.createElement('h3');
-        title.textContent = blockConfig.title;
+        return `<span class="${displayClass}">${formatCurrency(number)}</span>`;
+    }
+    
+    return String(value);
+}
 
-        // Add expand/collapse icon
-        if (isCollapsible) {
-            const icon = document.createElement('span');
-            icon.className = 'accordion-icon';
-            icon.textContent = '+';
-            header.appendChild(icon);
-        }
-
-        header.appendChild(title);
-        block.appendChild(header);
-
-        // --- Block Content ---
-        const content = document.createElement('div');
-        content.classList.add('block-content');
-        if (isCollapsible) {
-            content.classList.add('accordion-content');
-        }
-
-        let advFeeNetTotal = 0;
-        let otherChargesNetTotal = 0;
-        let showBlock = true;
-
-        if (isChargeBlock) {
-            // Determine the charge definitions based on block number
-            const chargeDefinitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
-            
-            // 1. Render Advocate Fee fields (always render if isChargeBlock)
-            chargeDefinitions.AdvocateFeeFieldsDisplay.forEach(sheetHeader => {
-                const displayName = blockConfig.fields[sheetHeader];
-                const value = processValue(record, sheetHeader);
-                content.appendChild(renderDataItem(sheetHeader, displayName, value));
-            });
-
-            // Calculate Advocate Fee Net (Fee - TDS)
-            advFeeNetTotal = calculateAdvocateFeePaymentNet(record, chargeDefinitions.AdvocateFeeNetFields);
-            content.appendChild(createSubtotalRow("Advocate Fee Net (Fee - TDS):", advFeeNetTotal, 'subtotal-row'));
-
-
-            // 2. Render Other Charges fields
-            if (!isAdvocateFeeOnly) {
-                chargeDefinitions.OtherChargesFields.forEach(sheetHeader => {
-                    const displayName = blockConfig.fields[sheetHeader];
-                    const value = processValue(record, sheetHeader);
-                    content.appendChild(renderDataItem(sheetHeader, displayName, value));
-                });
-                
-                // Calculate Other Charges Net
-                otherChargesNetTotal = calculateChargesNet(record, chargeDefinitions.OtherChargesFields);
-                content.appendChild(createSubtotalRow("Other Charges Net (Fee - TDS):", otherChargesNetTotal, 'subtotal-row'));
-            } else {
-                 // If only advocate fee is shown, set showBlock to false if only Other Charges fields have values
-                 // For now, we will simply hide the other charges fields and let the block show if any ADVOCATE FEE fields are present
-                 // We rely on the `isAdvocateFeeOnly` to filter the table display, not the block rendering.
-            }
+// Helper to render a group of fields
+function renderFieldGroup(record, fields, container) {
+    for (const sheetHeader in fields) {
+        const displayName = fields[sheetHeader];
+        const processedValue = processValue(record, sheetHeader);
+        
+        if (typeof processedValue === 'string' && processedValue.startsWith('<span')) {
+            const item = document.createElement('div');
+            item.className = 'data-block-item';
+            item.innerHTML = `
+                <span class="item-label">${displayName}:</span>
+                <span class="item-value">${processedValue}</span>
+            `;
+            container.appendChild(item);
         } else {
-            // Non-charge blocks (1, 2, 3, 4) - just render all fields
-            Object.entries(blockConfig.fields).forEach(([sheetHeader, displayName]) => {
-                const value = processValue(record, sheetHeader);
-                content.appendChild(renderDataItem(sheetHeader, displayName, value));
-            });
+            container.appendChild(renderDataItem(sheetHeader, displayName, processedValue));
         }
-
-        block.appendChild(content);
-
-        // Append the block only if it contains content or is not filtered out
-        if (showBlock) {
-            DATA_BLOCKS_CONTAINER.appendChild(block);
-            blockElements[blockNumber] = block;
-        }
-    });
-}
-
-// Function to add accordion listeners
-function addAccordionListeners() {
-    document.querySelectorAll('.accordion-header').forEach(header => {
-        header.removeEventListener('click', toggleAccordion); // Prevent multiple listeners
-        header.addEventListener('click', toggleAccordion);
-    });
-}
-
-// Accordion toggle handler
-function toggleAccordion(event) {
-    const header = event.currentTarget;
-    const content = header.nextElementSibling;
-    const icon = header.querySelector('.accordion-icon');
-    
-    header.classList.toggle('collapsed');
-    
-    if (header.classList.contains('collapsed')) {
-        content.style.maxHeight = '0';
-        icon.textContent = '+';
-    } else {
-        // Calculate the natural height of the content to allow smooth expansion
-        content.style.maxHeight = content.scrollHeight + 'px';
-        icon.textContent = '-';
     }
 }
 
+// Function to render the fee/charge subtotals (Blocks 5 and 6)
+function renderSubTotals(record, container, definitions, blockTitle) {
+    const isSec138 = blockTitle.includes("138");
 
-// ADVOCATE TRACKER LOGIC
+    const advocateFeeNet = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
+    const otherChargesNet = calculateChargesNet(record, definitions.OtherChargesFields);
+    const blockTotalNet = advocateFeeNet + otherChargesNet;
 
-ADVOCATE_TRACKER_SELECT.addEventListener('change', (event) => {
-    const selectedAdvocate = event.target.value;
-    if (selectedAdvocate) {
-        displayAdvocateSummary(selectedAdvocate);
-    } else {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+    // Advocate Fee Net
+    let advocateFeeNetRow = document.createElement('div');
+    advocateFeeNetRow.className = 'data-block-item subtotal-row advocate-fee-net';
+    advocateFeeNetRow.innerHTML = `
+        <span class="item-label">Advocate Fee Net (${isSec138 ? '138' : '09'}):</span>
+        <span class="item-value">${formatCurrency(advocateFeeNet)}</span>
+    `;
+    container.appendChild(advocateFeeNetRow);
+
+    // Other Charges Net
+    let otherChargesNetRow = document.createElement('div');
+    otherChargesNetRow.className = 'data-block-item subtotal-row other-charges-net';
+    otherChargesNetRow.innerHTML = `
+        <span class="item-label">Other Charges Net (${isSec138 ? '138' : '09'}):</span>
+        <span class="item-value">${formatCurrency(otherChargesNet)}</span>
+    `;
+    container.appendChild(otherChargesNetRow);
+
+    // Block Total
+    let blockTotalNetRow = document.createElement('div');
+    blockTotalNetRow.className = 'data-block-item subtotal-row block-total-net';
+    blockTotalNetRow.innerHTML = `
+        <span class="item-label">TOTAL CHARGES THIS SECTION:</span>
+        <span class="item-value">${formatCurrency(blockTotalNet)}</span>
+    `;
+    container.appendChild(blockTotalNetRow);
+}
+
+
+// Main rendering function that respects the toggle
+function renderFilteredBlocks(record, showDetailedFees) {
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+
+    DISPLAY_BLOCKS.forEach((block, index) => {
+        const isFeeBlock = index === 4 || index === 5;
+        
+        if (isFeeBlock && !showDetailedFees) {
+            return;
+        }
+
+        const blockElement = document.createElement('div');
+        blockElement.className = 'data-block';
+        
+        const isCollapsible = index < 4; 
+
+        const header = document.createElement('div');
+        header.className = isCollapsible ? 'block-header accordion-header' : 'block-header';
+        header.innerHTML = `<h3>${block.title}</h3>${isCollapsible ? '<span class="accordion-icon">▶</span>' : ''}`;
+
+        const contentWrapper = document.createElement('div');
+        contentWrapper.className = `data-block-content-wrapper${isCollapsible ? ' accordion-content' : ' expanded'}`;
+        
+        const content = document.createElement('div');
+        content.className = 'data-block-content';
+        
+        renderFieldGroup(record, block.fields, content);
+
+        if (isFeeBlock) {
+            const definitions = index === 4 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+            renderSubTotals(record, content, definitions, block.title);
+        }
+
+        contentWrapper.appendChild(content);
+        blockElement.appendChild(header);
+        blockElement.appendChild(contentWrapper);
+        DATA_BLOCKS_CONTAINER.appendChild(blockElement);
+    });
+}
+
+// Toggle functionality for Blocks 5 & 6
+ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
+    if (window.CURRENT_LOAN_RECORD) {
+        renderFilteredBlocks(window.CURRENT_LOAN_RECORD, ADVOCATE_FEE_TOGGLE.checked);
+        addAccordionListeners();
     }
 });
 
 
-function displayAdvocateSummary(advocateName) {
-    const advocateRecords = ALL_RECORDS.filter(record => 
-        (String(record["ADVOCATE"]).trim() === advocateName) || 
-        (String(record["Sec/9 Advocate"]).trim() === advocateName)
-    );
-
-    if (advocateRecords.length === 0) {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No payment records found for ${advocateName}.</p>`;
-        return;
-    }
-
-    // Sort: Loan No ascending
-    advocateRecords.sort((a, b) => {
-        const loanA = String(a["Loan No"]).trim();
-        const loanB = String(b["Loan No"]).trim();
-        return loanA.localeCompare(loanB);
-    });
-
-    let totalNetPayment = 0;
-    let tableHTML = `
-        <h3>Payment Summary for ${advocateName} (${advocateRecords.length} Records)</h3>
-        <table class="advocate-summary-table">
-            <thead>
-                <tr>
-                    <th>Loan No</th>
-                    <th>Customer Name</th>
-                    <th>Advocate Fee Net (₹)</th>
-                    <th>Payment Status</th>
-                    <th>Edit Status</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    advocateRecords.forEach(record => {
-        const loanNo = String(record["Loan No"]).trim();
-        const customerName = record["Customer Name"] || 'N/A';
-        const currentStatus = record[STATUS_FIELD] || STATUS_OPTIONS[1]; // Default to 'Processing'
-        
-        // Calculate Net Fee (Fee - TDS) for Sec 138 and Sec 09
-        const netFee138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-        const netFee09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-        const totalFeeNet = netFee138 + netFee09;
-        totalNetPayment += totalFeeNet;
-
-        const formattedFeeNet = totalFeeNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-        
-        const statusClass = currentStatus.toLowerCase();
-        
-        // Render the disabled tag or the edit button wrapper
-        let statusCellContent;
-        if (currentStatus !== 'Processing') {
-             // Display the newly set status as a disabled tag (user requirement)
-             statusCellContent = `<span class="status-tag status-${statusClass} disabled-tag">${currentStatus}</span>`;
-        } else {
-             // Only allow editing if status is 'Processing'
-             statusCellContent = `
-                <div class="status-cell-wrapper">
-                    <span class="status-tag status-processing">${currentStatus}</span>
-                    <button class="edit-status-btn" data-loan-no="${loanNo}">Edit</button>
-                </div>
-            `;
-        }
-
-        tableHTML += `
-            <tr data-loan-no="${loanNo}">
-                <td>${loanNo}</td>
-                <td>${customerName}</td>
-                <td class="numeric-cell">${formattedFeeNet}</td>
-                <td class="status-cell" data-current-status="${currentStatus}">${statusCellContent}</td>
-                <td class="edit-cell"></td>
-            </tr>
-        `;
-    });
-
-    const formattedTotalNetPayment = totalNetPayment.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-    tableHTML += `
-            </tbody>
-            <tfoot>
-                <tr class="grand-total-summary">
-                    <td colspan="2">GRAND TOTAL NET PAYMENT:</td>
-                    <td class="numeric-cell">${formattedTotalNetPayment}</td>
-                    <td></td>
-                    <td></td>
-                </tr>
-            </tfoot>
-        </table>
-    `;
-
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = tableHTML;
-    
-    // Add event listeners for the new "Edit" buttons
-    document.querySelectorAll('.edit-status-btn').forEach(button => {
-        button.addEventListener('click', handleEditStatus);
+// ACCORDION LOGIC
+function addAccordionListeners() {
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.removeEventListener('click', toggleAccordion);
+        header.addEventListener('click', toggleAccordion);
     });
 }
 
-
-// --- STATUS EDITING LOGIC ---
-
-function handleEditStatus(event) {
-    const button = event.target;
-    const loanNo = button.dataset.loanNo;
-    const tdElement = button.closest('td');
-    const currentStatus = tdElement.dataset.currentStatus;
+function toggleAccordion(event) {
+    const header = event.currentTarget;
+    const contentWrapper = header.nextElementSibling;
     
-    // 1. Ask for password
-    const authKey = prompt("Enter Secret Key to proceed with status update:");
-
-    if (!authKey || authKey.trim() === "") {
-        alert("Status update cancelled. Secret Key is required.");
-        return;
-    }
-
-    // 2. Hide current status/button and show dropdown/save button
-    tdElement.innerHTML = createStatusEditForm(loanNo, currentStatus);
-
-    // 3. Attach listeners for the new form elements
-    const saveButton = tdElement.querySelector('.save-status-btn');
-    const cancelButton = tdElement.querySelector('.cancel-status-btn');
-    
-    saveButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const newStatus = tdElement.querySelector('.status-select').value;
-        if (newStatus && newStatus !== currentStatus) {
-            confirmSaveStatus(authKey, loanNo, newStatus, tdElement);
-        } else {
-            // If status is the same or selection is invalid, just revert
-            revertToTag(tdElement, currentStatus, loanNo);
-        }
-    });
-    
-    cancelButton.addEventListener('click', (e) => {
-        e.stopPropagation();
-        revertToTag(tdElement, currentStatus, loanNo);
-    });
-}
-
-// Helper to create the dropdown and save/cancel buttons
-function createStatusEditForm(loanNo, currentStatus) {
-    let optionsHTML = STATUS_OPTIONS.map(status => {
-        // Exclude 'Processing' from selection since we are editing away from it
-        if (status !== 'Processing') {
-             return `<option value="${status}" ${status === currentStatus ? 'selected' : ''}>${status}</option>`;
-        }
-        return '';
-    }).join('');
-
-    return `
-        <div class="status-edit-form">
-            <select class="status-select">
-                <option value="">-- Select --</option>
-                ${optionsHTML}
-            </select>
-            <div class="edit-actions">
-                <button class="save-status-btn">Save</button>
-                <button class="cancel-status-btn">Cancel</button>
-            </div>
-        </div>
-    `;
-}
-
-// Helper to revert the cell to the final disabled tag or the edit button
-function revertToTag(tdElement, status, loanNo) {
-    const statusClass = status.toLowerCase();
-    
-    // If status is 'Processing', we revert to the editable state
-    if (status === 'Processing') {
-        tdElement.innerHTML = `
-            <div class="status-cell-wrapper">
-                <span class="status-tag status-processing">${status}</span>
-                <button class="edit-status-btn" data-loan-no="${loanNo}">Edit</button>
-            </div>
-        `;
-        // Re-attach listener
-        tdElement.querySelector('.edit-status-btn').addEventListener('click', handleEditStatus);
-    } else {
-        // If status is Paid or Rejected, display it as a disabled tag
-        tdElement.innerHTML = `<span class="status-tag status-${statusClass} disabled-tag">${status}</span>`;
-    }
-    tdElement.dataset.currentStatus = status;
-}
-
-// *** CRITICAL FIX APPLIED HERE: Update local data cache and re-render summary table ***
-async function confirmSaveStatus(authKey, loanNo, newStatus, tdElement) {
-    const dataToSend = {
-        "authKey": authKey,
-        "loanNo": loanNo,
-        "columnHeader": STATUS_FIELD,
-        "dataValue": newStatus
-    };
-
-    try {
-        const response = await fetch(API_URL_UPDATE, { // Use API_URL_UPDATE or the correct update endpoint
-            method: 'POST',
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
-
-            // 1. Find and update the local ALL_RECORDS cache immediately. (THE CRITICAL FIX)
-            const recordToUpdate = ALL_RECORDS.find(record => String(record["Loan No"]).trim() === loanNo);
-            if (recordToUpdate) {
-                recordToUpdate[STATUS_FIELD] = newStatus;
-            }
-            
-            // 2. Immediately update the individual cell (Optimistic UI update, showing the disabled tag)
-            revertToTag(tdElement, newStatus, loanNo);
-            
-            // 3. Re-render the entire summary table using the now-updated ALL_RECORDS cache.
-            // This prevents the flicker by ensuring displayAdvocateSummary uses the correct new status.
-            const lastSelectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
-            if (lastSelectedAdvocate) {
-                displayAdvocateSummary(lastSelectedAdvocate); 
-            }
-            
-            // ** Removed the problematic call to initialLoad() which caused the flicker **
-            
-        } else {
-            alert(`❌ Submission Error: ${result.message || 'Could not save status.'}`);
-            // Revert on API failure, using the status from the TD element's dataset
-            revertToTag(tdElement, tdElement.dataset.currentStatus, loanNo);
-        }
-
-    } catch (error) {
-        console.error("Error updating status:", error);
-        alert("❌ Network Error: Could not connect to the update service.");
-        // Revert on network failure
-        revertToTag(tdElement, tdElement.dataset.currentStatus, loanNo);
-    }
+    header.classList.toggle('expanded');
+    contentWrapper.classList.toggle('expanded');
 }
 
 
-// --- OTHER WRITE OPERATION (Unchanged) ---
-// 5. WRITE OPERATION 
+// 5. WRITE OPERATION (General Data Update)
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
@@ -988,8 +961,14 @@ FORM.addEventListener('submit', async function(event) {
         return;
     }
 
+    if (!LOAN_SELECT.value) {
+        MESSAGE_ELEMENT.textContent = '❌ Error: Please select a Loan No. first.';
+        return;
+    }
+
     const dataToSend = {};
     dataToSend[headerName] = dataValue; 
+    dataToSend["Loan No"] = LOAN_SELECT.value; 
     dataToSend["authKey"] = keyToSubmit; 
 
     try {
@@ -1007,197 +986,29 @@ FORM.addEventListener('submit', async function(event) {
         if (result.status === 'success') {
             MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}. Reloading data...`;
             FORM.reset(); 
+            // Reload all data to ensure the main table and tracker are updated
             initialLoad(); 
         } else {
             MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`;
         }
+
     } catch (error) {
         console.error("Error submitting data:", error);
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API for submission.';
+        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not submit data.';
     }
 });
 
 
-// 6. PASSWORD AUTH (Unchanged)
+// 6. TOGGLE WRITE FORM
 function showInputForm() {
     if (AUTH_KEY_INPUT.value === CLIENT_SIDE_AUTH_KEY) {
         FORM.style.display = 'block';
         AUTH_BUTTON.style.display = 'none';
-        AUTH_LABEL.style.display = 'none';
         AUTH_KEY_INPUT.style.display = 'none';
+        AUTH_LABEL.style.display = 'none';
+        MESSAGE_ELEMENT.textContent = 'Input enabled. Select Loan and enter Column Header & Data.';
     } else {
-        alert('❌ Invalid Key. Please enter the correct secret key.');
+        alert('Incorrect password. Please enter the correct secret key.');
         AUTH_KEY_INPUT.value = '';
     }
 }
-This issue is occurring because after a successful status update, the application is likely re-fetching the data from the server or re-rendering from an old cached version, causing a brief "flicker" back to the previous status.
-
-To fix this, we need to implement an **optimistic update** on the local data cache (`ALL_RECORDS`) immediately after the server confirms the save. Then, we must re-render the Advocate Summary table using the newly updated local cache. This will prevent the flicker and stably display the new status.
-
-I have updated `script.js` to implement this caching fix and also modified the display logic to permanently use the "Status Tag + Edit Icon" style as requested.
-
-Here are the changes for both `script.js` and `style.css`.
-
-## 1. File: `script.js` (Major Update and Fix)
-
-I've added the missing Advocate Tracker logic and implemented the fix in `confirmSaveStatus` to update the local cache (`ALL_RECORDS`) and re-render the summary table, eliminating the flicker.
-
-```javascript
-// Function to handle the actual save operation
-async function confirmSaveStatus(authKey, loanNo, newStatus, tdElement) {
-    const URL_TO_USE = API_URL; // Use the same API endpoint for updating
-
-    const dataToSend = {
-        "authKey": authKey,
-        "Loan No": loanNo,
-        [STATUS_FIELD]: newStatus // Update the specific status field
-    };
-
-    try {
-        const response = await fetch(URL_TO_USE, {
-            method: 'POST',
-            mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-
-        if (result.status === 'success') {
-            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
-            
-            // --- FIX START: Update local cache and re-render table to prevent flicker ---
-            
-            // 1. Find and **optimistically update the local ALL_RECORDS cache** immediately.
-            // This is CRITICAL to prevent displayAdvocateSummary from using stale data.
-            const recordToUpdate = ALL_RECORDS.find(record => String(record["Loan No"]).trim() === loanNo);
-            if (recordToUpdate) {
-                recordToUpdate[STATUS_FIELD] = newStatus;
-            }
-            
-            // 2. Re-render the entire summary table using the now-updated local cache.
-            // This updates all UI elements, including the grand total.
-            const advocateName = ADVOCATE_TRACKER_SELECT.value; 
-            if (advocateName) {
-                displayAdvocateSummary(advocateName); 
-            }
-            // --- FIX END ---
-
-        } else {
-            alert(`❌ Update Error: ${result.message || 'Could not save status.'}`);
-            // Revert cell back to original state if save fails
-            const originalStatus = tdElement.querySelector('.status-dropdown').getAttribute('data-original-status');
-            const advocateName = tdElement.getAttribute('data-advocate');
-            revertToTag(tdElement, originalStatus, loanNo, advocateName);
-        }
-    } catch (error) {
-        console.error("Network error during status save:", error);
-        alert("❌ Network Error: Could not connect to API for status update.");
-        // Revert cell back to original state on network failure
-        const originalStatus = tdElement.querySelector('.status-dropdown').getAttribute('data-original-status');
-        const advocateName = tdElement.getAttribute('data-advocate');
-        revertToTag(tdElement, originalStatus, loanNo, advocateName);
-    }
-}
-
-// Helper to determine CSS class for status tag
-function getStatusClassName(status) {
-    if (status === 'Paid') return 'status-paid';
-    if (status === 'Processing') return 'status-processing';
-    if (status === 'Rejected') return 'status-rejected';
-    return 'status-unset';
-}
-
-// Function to convert the cell content to a disabled tag with an edit option, 
-// or return the HTML for table generation.
-function revertToTag(tdElement, newStatus, loanNo, advocateName) {
-    const statusClass = getStatusClassName(newStatus);
-    
-    // HTML content for the disabled tag with the Edit option
-    const htmlContent = `
-        <div class="status-tag ${statusClass}">
-            ${newStatus}
-            <span class="edit-icon" 
-                  data-loan-no="${loanNo}" 
-                  data-advocate="${advocateName}" 
-                  data-current-status="${newStatus}">
-                ✍️ Edit
-            </span>
-        </div>
-    `;
-
-    if (tdElement) {
-        // Case 1: Called after a successful save or cancel (tdElement is the <td> to update)
-        tdElement.innerHTML = htmlContent;
-        
-        // Re-attach listener to the newly created Edit icon
-        const editIcon = tdElement.querySelector('.edit-icon');
-        if (editIcon) {
-            editIcon.addEventListener('click', function() {
-                showPasscodePopup(this);
-            });
-        }
-        return;
-    }
-    
-    // Case 2: Called during full table render (return HTML string)
-    return htmlContent;
-}
-
-
-// --- MODIFIED displayAdvocateSummary function ---
-function displayAdvocateSummary(selectedAdvocate) {
-    // ... (existing filtering logic)
-    
-    // ... (inside the payments.forEach(payment => { ... }) loop)
-    
-        // Calculate current status (This ensures the latest status from ALL_RECORDS is used)
-        const currentStatus = payment.record[STATUS_FIELD] || 'Processing'; 
-        const sections = [];
-        if (payment.details.is138) sections.push("Sec 138");
-        if (payment.details.is09) sections.push("Sec 09");
-
-        // The status is displayed as a disabled tag with an Edit option (calls revertToTag)
-        const statusTagHtml = revertToTag(null, currentStatus, payment.loanNo, selectedAdvocate); 
-
-        html += ` 
-            <tr class="advocate-payment-row"> 
-                <td>${payment.loanNo}</td> 
-                <td>${payment.branch}</td> 
-                <td>${sections.join(' & ')}</td> 
-                <td data-loan-no="${payment.loanNo}" data-advocate="${selectedAdvocate}" class="status-cell">
-                    ${statusTagHtml}
-                </td> 
-                <td class="right-align"> 
-                    <button class="breakdown-button" 
-                            data-loan-no="${payment.loanNo}" 
-                            data-advocate="${selectedAdvocate}" 
-                            data-net="${payment.details.totalAdvocateNet}"
-                    > 
-                        ${formattedNet} 
-                    </button> 
-                </td> 
-            </tr> 
-        `; 
-    });
-
-    // ... (existing code for Grand Total)
-    
-    // 3. Render and Attach Listeners
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = html; 
-
-    // Attach listener to all EDIT ICONS to trigger auth/popup
-    document.querySelectorAll('.edit-icon').forEach(icon => {
-        icon.addEventListener('click', function() {
-            showPasscodePopup(this);
-        });
-    });
-    
-    // ... (existing code for Breakdown Buttons listener)
-}
-// --- END MODIFIED displayAdvocateSummary function ---
-
-// ... (Ensure the rest of the file is included, including the new showPasscodePopup 
-// and enableStatusDropdown logic to handle the Edit click and status change)
