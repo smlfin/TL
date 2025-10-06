@@ -657,3 +657,62 @@ input:checked + .slider:before {
         display: none;
     }
 }
+/* --- 8. ADVOCATE TRACKER STYLES (New/Modified) --- */
+
+/* Style for the disabled status tag */
+.status-tag {
+    display: inline-flex;
+    align-items: center;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.9em;
+    min-width: 80px;
+    justify-content: space-between;
+    gap: 8px;
+    /* Ensure it looks static/disabled */
+    pointer-events: none; 
+}
+
+/* Status specific colors */
+.status-paid {
+    background-color: var(--color-success);
+    color: white;
+}
+.status-processing {
+    background-color: #ffc107; /* Amber/Yellow */
+    color: #333;
+}
+.status-rejected {
+    background-color: var(--color-danger);
+    color: white;
+}
+.status-unset {
+    background-color: var(--color-border);
+    color: #333;
+}
+
+/* Style for the 'Edit' icon */
+.edit-icon {
+    pointer-events: auto; /* Re-enable pointer events only for the icon */
+    cursor: pointer;
+    font-size: 0.8em;
+    font-weight: normal;
+    text-decoration: underline;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+    user-select: none;
+    padding-left: 5px; /* Separate icon from text */
+}
+
+.edit-icon:hover {
+    opacity: 1;
+}
+
+/* Ensure the status cell content (dropdown + buttons) is vertically aligned */
+.status-cell {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+}
