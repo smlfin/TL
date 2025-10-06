@@ -504,7 +504,7 @@ function doPost(e) {
     const requestData = JSON.parse(raw);
 
     // AUTH CHECK
-    if (requestData.authKey !== SECRET_WRITE_KEY) {
+    if (requestData.authKey !== GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
       const errorData = { status: 'error', message: 'Authorization failed. Invalid secret key.' };
       return sendJson_(errorData, null);
     }
