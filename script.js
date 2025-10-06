@@ -1139,9 +1139,10 @@ FORM.addEventListener('submit', async function(event) {
     }
 
     const dataToSend = {};
-    dataToSend[headerName] = dataValue; 
-    dataToSend["Loan No"] = LOAN_SELECT.value; // CRITICAL FIX: Loan No must be included for row targeting
-    dataToSend["authKey"] = keyToSubmit; 
+dataToSend[headerName] = dataValue; 
+dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
+dataToSend["ADVOCATE"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
+dataToSend["authKey"] = keyToSubmit; 
 
     try {
         const response = await fetch(API_URL, {
