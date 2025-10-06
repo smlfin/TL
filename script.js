@@ -701,6 +701,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
 
     if (newStatus === originalStatus) {
         alert("Status is unchanged. Aborting save.");
+        // Assuming cancelStatusEdit reverts the UI element to its original state
         cancelStatusEdit(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
         return;
     }
@@ -711,26 +712,35 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     }
 
     // Display saving status before API call
-    tdElement.innerHTML = `<span class="status-saving">Saving...</span>`; 
+    tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
     
-    const headerName = STATUS_FIELD; 
+    const headerName = STATUS_FIELD;
 
     const dataToSend = {
-    [headerName]: newStatus,
-    "Loan No": loanNo, 
-    "ADVOCATE": ADVOCATE_TRACKER_SELECT.value, // <--- CRITICAL FIX: Added the advocate's name
-    "authKey": CLIENT_SIDE_AUTH_KEY 
-};
+        [headerName]: newStatus,
+        "Loan No": loanNo,
+        "ADVOCATE": ADVOCATE_TRACKER_SELECT.value, // <--- CRITICAL FIX: Included advocate's name
+        "authKey": CLIENT_SIDE_AUTH_KEY
+    };
 
-try {
+    try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'cors', 
+            mode: 'cors',
             headers: {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify(dataToSend)
         });
+
+        // --- ENHANCED ERROR CHECK ---
+        // 1. Check for bad HTTP status (e.g., 500, 404) before trying to parse JSON.
+        if (!response.ok) {
+            // Throwing an error here jumps directly to the 'catch' block below
+            const errorText = await response.text();
+            throw new Error(`Server returned HTTP ${response.status}: ${errorText.substring(0, 100)}...`);
+        }
+        // -----------------------------
 
         const result = await response.json();
 
@@ -738,21 +748,22 @@ try {
             // SUCCESS: The data should now be permanently in the Google Sheet.
             alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. The page will now reload all data to confirm the change.`);
             
-            // Force a full data re-fetch from the server, which now has the permanent data
+            // Force a full data re-fetch from the server
             initialLoad();
             
         } else {
-            // FAILURE: The server returned a specific error message.
+            // FAILURE: The server returned a specific error message (e.g., failed to write to sheet).
             alert(`❌ Submission Error for Loan ${loanNo}: ${result.message || 'Server returned non-success status.'}. Status reverted.`);
             // On failure, revert back to the original status tag immediately
             revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
         }
 
     } catch (error) {
-        // CATCH: A network connection or other non-API error occurred.
+        // CATCH: A network connection, timeout, or bad HTTP status error occurred (thrown above).
         console.error("Error saving status:", error);
-        alert(`❌ Network Error while saving status for Loan ${loanNo}. Status reverted.`);
-        // On network failure, revert back to the original status tag
+        alert(`❌ Network or Server Error while saving status for Loan ${loanNo}. Status reverted.`);
+        
+        // On network/critical failure, revert back to the original status tag
         revertToTag(tdElement, originalStatus, loanNo, ADVOCATE_TRACKER_SELECT.value);
     }
 }
