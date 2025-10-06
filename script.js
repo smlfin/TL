@@ -264,7 +264,7 @@ const DISPLAY_BLOCKS = [
             "Sec/9 Filing Date": "Sec-09 Filing Date",
             "Sec/9 Filing Amt": "Sec-09 Filing Amount",
             "Sec/9 Advocate": "Advocate", 
-            "Sec/9 Case No": "CASE NO",   
+            "Sec/9 Case No": "CASE NO",  
             "Attachment eff Date": "Attachment eff Date",
         }
     },
@@ -304,9 +304,59 @@ const DISPLAY_BLOCKS = [
     }
 ];
 
+// ====================================================================
+// 2. CORE FUNCTIONS (Initial Fetch)
+// ====================================================================
+
+/**
+ * CORE FUNCTION: Fetches all data and initializes the application.
+ * Place the full content of your initialLoad function here.
+ * NOTE: This function must be defined before the DOMContentLoaded listener.
+ */
+async function initialLoad() {
+    LOADING_STATUS.textContent = 'Loading all data from server...';
+    LOADING_STATUS.style.display = 'block';
+    
+    try {
+        const response = await fetch(API_URL);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            ALL_RECORDS = result.data;
+            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))];
+            
+            // Populate branch dropdown
+            populateBranchDropdown(branches);
+            
+            // Populate advocate dropdown for the tracker
+            const advocates = [...new Set(
+                ALL_RECORDS.flatMap(record => [record['ADVOCATE'], record['Sec/9 Advocate']])
+                           .filter(a => a)
+                           .map(a => String(a).trim())
+            )].sort();
+            populateAdvocateDropdown(advocates);
+
+            LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
+            LOADING_STATUS.style.color = 'var(--color-success)';
+        } else {
+            LOADING_STATUS.textContent = `❌ Error fetching data: ${result.message}`;
+            LOADING_STATUS.style.color = 'var(--color-danger)';
+        }
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        LOADING_STATUS.textContent = `❌ Network Error: Could not connect to API.`;
+        LOADING_STATUS.style.color = 'var(--color-danger)';
+    } finally {
+        // Hide loading status after a brief delay
+        setTimeout(() => {
+            LOADING_STATUS.style.display = 'none';
+        }, 2000);
+    }
+}
+
 
 // ====================================================================
-// 2. DOM ELEMENTS & INITIALIZATION
+// 3. DOM ELEMENTS & INITIALIZATION
 // ====================================================================
 
 const FORM = document.getElementById('record-form');
@@ -332,8 +382,8 @@ const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 
 
+// CRITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
-
 // ====================================================================
 // 3. WRITE OPERATION: Handles POST requests (Data Submission) - FINAL FIX FOR TWO ADVOCATE COLUMNS
 // ====================================================================
