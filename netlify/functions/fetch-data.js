@@ -9,7 +9,7 @@ exports.handler = async function(event, context) {
     const method = event.httpMethod;
     
     // Retrieve the secret key from Netlify Environment Variables
-    const authKey = process.env.SECRET_WRITE_KEY; 
+    const authKey = process.env.GOOGLE_SERVICE_ACCOUNT_CREDENTIALS; 
 
     // 🛑 DEBUGGING STEP: Log the key status (for testing)
     console.log("DEBUG: Key Retrieved:", authKey ? "Key Found" : "Key MISSING! (CRITICAL ERROR)");
