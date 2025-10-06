@@ -662,30 +662,93 @@ function showPasscodePopup(iconElement) {
     }
 }
 
-// 4.2. Replace tag with dropdown and buttons
+// ---------- helper: sanitize a string to a safe DOM id ----------
+function toSafeId(str) {
+  if (str === undefined || str === null) return '';
+  return String(str).trim().replace(/[^A-Za-z0-9\-_]/g, '_'); // only letters, numbers, dash, underscore
+}
+
+// ---------- new enableStatusDropdown (build elements & listeners safely) ----------
 function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
-    let selectHTML = `<div class="status-edit-mode">`;
-    
-    // Dropdown for status selection
-    selectHTML += `<select id="status-select-${loanNo}" class="status-select" data-original-status="${currentStatus}">`;
-    
-    STATUS_OPTIONS.forEach(option => {
-        const isSelected = option === currentStatus ? 'selected' : '';
-        selectHTML += `<option value="${option}" ${isSelected}>${option}</option>`;
+    // ensure tdElement exists
+    if (!tdElement) return;
+
+    const safeLoanId = toSafeId(loanNo);
+    const selectId = `status-select-${safeLoanId}`;
+    const cellId = `status-cell-${safeLoanId}`;
+
+    // create wrapper
+    const wrapper = document.createElement('div');
+    wrapper.className = 'status-edit-mode';
+
+    // dropdown
+    const select = document.createElement('select');
+    select.id = selectId;
+    select.className = 'status-select';
+    select.dataset.originalStatus = currentStatus || '';
+    select.dataset.loanNo = loanNo;
+    select.dataset.advocate = advocateName || '';
+
+    // Ensure STATUS_OPTIONS is defined somewhere else in your script.
+    if (Array.isArray(STATUS_OPTIONS)) {
+      STATUS_OPTIONS.forEach(opt => {
+          const o = document.createElement('option');
+          o.value = opt;
+          o.textContent = opt;
+          if (opt === currentStatus) o.selected = true;
+          select.appendChild(o);
+      });
+    } else {
+      // fallback: add currentStatus as a single option if STATUS_OPTIONS missing
+      const o = document.createElement('option');
+      o.value = currentStatus || 'Processing';
+      o.textContent = currentStatus || 'Processing';
+      select.appendChild(o);
+    }
+
+    // buttons container
+    const btnWrap = document.createElement('div');
+    btnWrap.className = 'status-buttons';
+
+    // Save button
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.className = 'status-save-btn';
+    saveBtn.textContent = 'Save';
+    saveBtn.addEventListener('click', async function (evt) {
+        // show saving
+        tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
+        // get selected value
+        const newStatus = select.value;
+        try {
+            await confirmSaveStatus(loanNo, newStatus, tdElement); // pass DOM tdElement
+        } catch (err) {
+            console.error('Unexpected error in save click:', err);
+            revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
+        }
     });
 
-    selectHTML += `</select>`;
-    
-    // Add Save and Cancel buttons
-    selectHTML += `
-        <div class="status-buttons">
-            <button class="status-save-btn" onclick="confirmSaveStatus('${loanNo}', document.getElementById('status-select-${loanNo}').value, document.getElementById('status-cell-${loanNo}'))">Save</button>
-            <button class="status-cancel-btn" onclick="cancelStatusEdit(document.getElementById('status-cell-${loanNo}'), '${currentStatus}', '${loanNo}', '${advocateName}')">Cancel</button>
-        </div>
-    </div>`;
-    
-    tdElement.innerHTML = selectHTML;
+    // Cancel button
+    const cancelBtn = document.createElement('button');
+    cancelBtn.type = 'button';
+    cancelBtn.className = 'status-cancel-btn';
+    cancelBtn.textContent = 'Cancel';
+    cancelBtn.addEventListener('click', function () {
+        revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
+    });
+
+    btnWrap.appendChild(saveBtn);
+    btnWrap.appendChild(cancelBtn);
+
+    wrapper.appendChild(select);
+    wrapper.appendChild(btnWrap);
+
+    tdElement.id = cellId;
+    tdElement.innerHTML = ''; // clear old contents
+    tdElement.appendChild(wrapper);
 }
+
+
 
 // 4.3. Function to revert to the disabled state without saving
 function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
