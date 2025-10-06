@@ -781,17 +781,16 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
     revertToTag(tdElement, originalStatus, loanNo, advocateName);
 }
 
+// ====================================================================
+// ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
+// ====================================================================
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     
-    // 1. Get current advocate and original status
     const sel = tdElement.querySelector('.status-select');
-    // Get the original status from the DOM for error reversion
     const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
-
-    // Get the advocate name from the global filtering dropdown (ADVOCATE_TRACKER_SELECT)
+    // Get advocate name from the global filtering dropdown
     const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
 
-    // No-op if status is unchanged
     if (!newStatus || newStatus === originalStatus) {
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
@@ -804,28 +803,25 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     if (record) {
         const normalizedAdvocate = currentAdvocate.trim();
 
-        // Check against primary ADVOCATE column
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment'; 
+            targetColumn = '138 Payment'; // Primary Advocate Column Name
         } 
-        // Check against secondary Sec/9 Advocate column
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment'; 
+            targetColumn = 'sec9 Payment'; // Secondary Advocate Column Name
         }
     }
     
-    // Fail if we couldn't map the advocate name to a payment column
     if (!targetColumn) {
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
-        alert("Error: Cannot determine the correct payment column for this advocate. Update aborted.");
+        alert("Error: Cannot determine the correct payment column. Update aborted.");
         return;
     }
 
-    // 2. Build the payload using the non-conflicting key: ADVOCATE_ID
+    // 2. Build the payload using the ADVOCATE_ID key
     const dataToSend = {
         [targetColumn]: newStatus, 
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, // The key the backend (gs.txt) now expects
+        "ADVOCATE_ID": currentAdvocate, // <-- The key the backend (gs.txt) must use for lookup
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
     
@@ -842,7 +838,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result && result.status === 'success') {
-            // Update the local cache (ALL_RECORDS) and revert display
+            // Update local cache and display
             const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
             if (updatedRecord) {
                 updatedRecord[targetColumn] = newStatus;
@@ -850,14 +846,12 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
             revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
         } else {
             alert(`❌ Status update failed: ${result.message}`);
-            // Revert display on failure
             revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
 
     } catch (error) {
         console.error('Error saving status:', error);
         alert('❌ Network or server error during update. Check console.');
-        // Revert display on failure
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
