@@ -42,6 +42,418 @@ function formatDate(dateValue) {
     }
     
     let date;
+    // 1. Try to parse as a standard JavaScript date
+    date = new Date(dateValue);
+    
+    // 2. If standard parsing fails (i.e., it's a raw string)
+    if (isNaN(date.getTime())) {
+        try {
+            const parts = String(dateValue).trim().split(/[\.\/]/); 
+            
+            if (parts.length === 3) {
+                const day = parseInt(parts[0], 10);
+                const month = parseInt(parts[1], 10);
+                const year = parseInt(parts[2], 10);
+                
+                if (day > 0 && month > 0 && year > 1900) {
+                    date = new Date(Date.UTC(year, month - 1, day)); 
+                    if (isNaN(date.getTime())) {
+                        return dateValue; 
+                    }
+                } else {
+                    return dateValue; 
+                }
+            } else {
+                return dateValue; 
+            }
+        } catch (e) {
+            return dateValue; 
+        }
+    }
+
+    // 3. Final formatting if a valid date object was created
+    if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString('en-GB', { timeZone: 'UTC' });
+    }
+
+    return dateValue; // Fallback
+}
+
+
+// Helper function to safely parse a value
+const parseNumber = (value) => {
+    if (typeof value === 'string') {
+        value = value.replace(/[$,]/g, '').trim();
+    }
+    const number = parseFloat(value);
+    return isNaN(number) ? 0 : number;
+};
+
+// Helper function to format currency for display
+function formatCurrency(value) {
+    const number = parseNumber(value);
+    if (isNaN(number)) return 'N/A';
+    return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+}
+
+// Function to calculate net total for any group of charges (used for Snapshot Box/Other Charges)
+function calculateChargesNet(record, fields) {
+    let total = 0;
+    
+    fields.forEach(field => {
+        let sign = 1; 
+        if (field.includes("TDS")) {
+            sign = -1; // TDS is subtracted
+        }
+        total += parseNumber(record[field]) * sign;
+    });
+
+    return total;
+}
+
+/**
+ * Function to calculate the required Advocate Fee Payment Net (Fees - TDS, ignoring GST)
+ * @param {object} record - The loan record.
+ * @param {string[]} feeFields - The list of fields containing fees (excluding GST fields).
+ * @returns {number} The net payment amount.
+ */
+function calculateAdvocateFeePaymentNet(record, feeFields) {
+    let totalNet = 0;
+    
+    feeFields.forEach(field => {
+        const value = parseNumber(record[field]);
+
+        if (field.includes("TDS")) {
+            totalNet -= value; // Subtract TDS
+        } else if (!field.includes("GST")) {
+            totalNet += value; // Add Fee (but ignore GST)
+        }
+    });
+
+    return totalNet;
+}
+
+// --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
+// (Your CHARGE_DEFINITIONS_138, CHARGE_DEFINITIONS_09, and CHARGE_FIELDS_FOR_SNAPSHOT definitions go here)
+
+const CHARGE_DEFINITIONS_138 = {
+    // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
+    "AdvocateFeeNetFields": [
+        "Initial Fee for Sec.138", 
+        "TDS of Sec.138 Initial Fee", 
+        "Final fee for Sec 138", 
+        "TDS of Final fee for Sec 138", 
+    ],
+    // The list of all Advocate Fee fields to display in Block 5/Tracker breakdown
+    "AdvocateFeeFieldsDisplay": [
+        "Initial Fee for Sec.138",
+        "GST of Sec.138 Initial Fee",
+        "TDS of Sec.138 Initial Fee",
+        "Final fee for Sec 138",
+        "GST of Final fee for Sec 138",
+        "TDS of Final fee for Sec 138",
+    ],
+    // Other Charges Net Group (Included in Block 5 total but separate from Advocate Fee Net)
+    "OtherChargesFields": [
+        "Cheque Return Charges",
+        "POA for Filing Sec 138",
+        "Sec.138 Notice Expense",
+        "Warrant Steps of Sec 138",
+    ]
+};
+
+// 6) Section 09 Fee & Charges Definitions
+const CHARGE_DEFINITIONS_09 = {
+    // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
+    "AdvocateFeeNetFields": [
+        "Initial Fee for Sec 09", 
+        "TDS of Initial Fee", 
+        "Final Fee For Sec 09", 
+        "TDS of Final Fee For Sec 09", 
+    ],
+    // The list of all Advocate Fee fields to display in Block 6/Tracker breakdown
+    "AdvocateFeeFieldsDisplay": [
+        "Initial Fee for Sec 09",
+        "GST of Sec 09 Initial Fee",
+        "TDS of Initial Fee",
+        "Final Fee For Sec 09",
+        "GST of Final Fee For Sec 09",
+        "TDS of Final Fee For Sec 09",
+    ],
+    // Other Charges Net Group (Included in Block 6 total but separate from Advocate Fee Net)
+    "OtherChargesFields": [
+        "Taken Expense for Sec 09 filing",
+        "POA for Filing Sec 09",
+        "Fresh Notice Expense for Filing Sec 09",
+        "Attachment Batta For Sec 09",
+        "Attachment Petition",
+        "Property Attachment Expense",
+        "Sec 09 Court fee & E-Filing Expense",
+        "Attachment Lifting Expense",
+    ]
+};
+
+// All Charge Fields for Snapshot Box Total
+const CHARGE_FIELDS_FOR_SNAPSHOT = [
+    "Demand Notice Expense",
+    ...CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay.filter(f => !f.includes("GST")), // Fees and TDS (Net)
+    ...CHARGE_DEFINITIONS_138.OtherChargesFields,
+    ...CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay.filter(f => !f.includes("GST")), // Fees and TDS (Net)
+    ...CHARGE_DEFINITIONS_09.OtherChargesFields,
+];
+
+// Helper function to calculate the total for the Snapshot Box
+function calculateTotalCharges(record) {
+    return calculateChargesNet(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
+}
+
+
+// --- DISPLAY CONFIGURATION (All Fields) ---
+const DISPLAY_BLOCKS = [
+    {
+        title: "1) Customer & Loan Details",
+        fields: {
+            "Loan Branch": "Branch",
+            "Loan No": "Loan No",
+            "Customer Name": "Customer Name",
+            "Mobile": "Mobile",
+            "Loandate": "Loan Date",
+            "Loan Amount": "Loan Amount",
+            "EMI": "EMI",
+            "Due Date": "Due Date",
+            "Tenure": "Tenure",
+            "Paid": "Paid",
+            "Arrear": "Arrear",
+            "Arrear Amount": "Arrear Amount",
+            "Loan Balance": "Loan Balance",
+            "Arrear From To": "Arrear From To",
+            "Status": "Status",
+            "Last Receipt Date": "Last Receipt Date",
+        }
+    },
+    {
+        title: "2) Legal Action Recommendation & Remarks",
+        fields: {
+            "Demand Notice Sent Date": "Demand Notice Sent Date",
+            "V P Remarks": "V P Remarks",
+            "Legal Remarks": "Legal Remarks",
+        }
+    },
+    {
+        title: "3) Cheque return status",
+        fields: {
+            "CHEQ. NO.": "Cheque Number",
+            "CQ DATE/PRESENTATION DATE": "Cheque presentation Date",
+            "CQ RETURN DATE": "Cheque return Date",
+            "AMOUNT": "AMOUNT",
+            "B/G": "Borrower / Guarantor",
+            "BANK": "BANK",
+            "REMARKS": "REMARKS",
+            "ADVOCATE": "ADVOCATE", 
+            "HANDED OVER DATE": "HANDED OVER DATE",
+            "Notice Remarks": "Notice Remarks",
+            "CASE FILED": "CASE FILED",
+            "CASE NO": "CASE NO", 
+        }
+    },
+    {
+        title: "4) Section 9 Status",
+        fields: {
+            "Sec/9 Filing Date": "Sec-09 Filing Date",
+            "Sec/9 Filing Amt": "Sec-09 Filing Amount",
+            "Sec/9 Advocate": "Advocate", 
+            "Sec/9 Case No": "CASE NO",  
+            "Attachment eff Date": "Attachment eff Date",
+        }
+    },
+    {
+        title: "5) Section 138 Fee & Charges",
+        fields: {
+            "Initial Fee for Sec.138": "Initial Fee",
+            "GST of Sec.138 Initial Fee": "GST of Initial Fee",
+            "TDS of Sec.138 Initial Fee": "TDS of Initial Fee",
+            "Final fee for Sec 138": "Final fee",
+            "GST of Final fee for Sec 138": "GST of Final fee",
+            "TDS of Final fee for Sec 138": "TDS of Final fee",
+            "Cheque Return Charges": "Cheque Return Charges",
+            "POA for Filing Sec 138": "POA for Filing",
+            "Sec.138 Notice Expense": "Notice Expense",
+            "Warrant Steps of Sec 138": "Warrant Steps",
+        }
+    },
+    {
+        title: "6) Section 09 Fee & Charges",
+        fields: {
+            "Initial Fee for Sec 09": "Initial Fee",
+            "GST of Sec 09 Initial Fee": "GST of Initial Fee",
+            "TDS of Initial Fee": "TDS of Initial Fee",
+            "Final Fee For Sec 09": "Final Fee",
+            "GST of Final Fee For Sec 09": "GST of Final Fee",
+            "TDS of Final Fee For Sec 09": "TDS of Final Fee",
+            "Taken Expense for Sec 09 filing": "Schedule Taken Expense",
+            "POA for Filing Sec 09": "POA for Filing",
+            "Fresh Notice Expense for Filing Sec 09": "Fresh Notice Expense",
+            "Attachment Batta For Sec 09": "Attachment Batta",
+            "Attachment Petition": "Attachment Petition",
+            "Property Attachment Expense": "Property Attachment Expense",
+            "Sec 09 Court fee & E-Filing Expense": "Court fee & E-Filing Expense",
+            "Attachment Lifting Expense": "Attachment Lifting Expense",
+        }
+    }
+];
+
+// ====================================================================
+// 2. DOM ELEMENTS & INITIALIZATION
+// ====================================================================
+
+const FORM = document.getElementById('record-form');
+const MESSAGE_ELEMENT = document.getElementById('submission-message');
+const AUTH_KEY_INPUT = document.getElementById('auth-key');
+const AUTH_BUTTON = document.getElementById('enable-input-button'); 
+const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
+const BRANCH_SELECT = document.getElementById('branch-select');
+const LOAN_SELECT = document.getElementById('loan-select');
+const SEARCH_BUTTON = document.getElementById('search-button');
+const LOADING_STATUS = document.getElementById('loading-status');
+const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
+const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
+const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
+const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
+const HEADER_INPUT = document.getElementById('header_name'); 
+const DATA_INPUT = document.getElementById('data_value');
+const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
+const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
+
+// Elements for Advocate Tracker
+const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
+const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
+
+
+// ====================================================================
+// 3. DROPDOWN POPULATION & CORE LOGIC
+// ====================================================================
+
+/**
+ * REQUIRED FIX: Defines the function called by initialLoad.
+ */
+function populateBranchDropdown(branches) {
+    BRANCH_SELECT.innerHTML = '<option value="">-- Select Branch --</option>';
+    branches.forEach(branch => {
+        const option = document.createElement('option');
+        option.value = branch;
+        option.textContent = branch;
+        BRANCH_SELECT.appendChild(option);
+    });
+}
+
+/**
+ * REQUIRED FIX: Defines the function called by initialLoad.
+ */
+function populateAdvocateDropdown(advocates) {
+    ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Select Advocate --</option>';
+    advocates.forEach(advocate => {
+        const option = document.createElement('option');
+        option.value = advocate;
+        option.textContent = advocate;
+        ADVOCATE_TRACKER_SELECT.appendChild(option);
+    });
+}
+
+/**
+ * CORE FUNCTION: Fetches all data and initializes the application.
+ * This is now defined AFTER the functions it calls.
+ */
+async function initialLoad() {
+    LOADING_STATUS.textContent = 'Loading all data from server...';
+    LOADING_STATUS.style.display = 'block';
+    
+    try {
+        const response = await fetch(API_URL);
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            ALL_RECORDS = result.data;
+            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))];
+            
+            // Populate branch dropdown
+            populateBranchDropdown(branches);
+            
+            // Populate advocate dropdown for the tracker
+            const advocates = [...new Set(
+                ALL_RECORDS.flatMap(record => [record['ADVOCATE'], record['Sec/9 Advocate']])
+                           .filter(a => a)
+                           .map(a => String(a).trim())
+            )].sort();
+            populateAdvocateDropdown(advocates);
+
+            LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
+            LOADING_STATUS.style.color = 'var(--color-success)';
+        } else {
+            LOADING_STATUS.textContent = `❌ Error fetching data: ${result.message}`;
+            LOADING_STATUS.style.color = 'var(--color-danger)';
+        }
+    } catch (error) {
+        console.error("Fetch Error:", error);
+        LOADING_STATUS.textContent = `❌ Network Error: Could not connect to API.`;
+        LOADING_STATUS.style.color = 'var(--color-danger)';
+    } finally {
+        // Hide loading status after a brief delay
+        setTimeout(() => {
+            LOADING_STATUS.style.display = 'none';
+        }, 2000);
+    }
+}
+
+
+// CRITICAL: Initialize the data fetch on page load
+document.addEventListener('DOMContentLoaded', initialLoad);
+
+// All other functions and event listeners should follow here:
+// e.g., showInputForm(), handleLoanSelectChange(), displayLoanRecord(), 
+// ====================================================================
+// 1. CONSTANTS AND HELPER FUNCTIONS
+// ====================================================================
+
+// API URL now points to the Netlify Function proxy (or your actual endpoint)
+const API_URL = "/.netlify/functions/fetch-data"; 
+const CLIENT_SIDE_AUTH_KEY = "123"; // The simple password for write/edit operations
+
+let ALL_RECORDS = []; 
+window.CURRENT_LOAN_RECORD = null;
+
+// Advocate Tracker Status Definitions
+const STATUS_FIELD = "Advocate Payment Status";
+const STATUS_OPTIONS = ["Processing", "Rejected", "Paid"]; 
+
+// Fields that contain dates and need conversion
+const DATE_FIELDS = [
+    "Loandate", 
+    "Due Date", 
+    "Last Receipt Date", 
+    "Demand Notice Sent Date", 
+    "CQ DATE/PRESENTATION DATE", 
+    "CQ RETURN DATE", 
+    "HANDED OVER DATE", 
+    "Sec9FilingDate",
+    "AttachmentEffDate"
+];
+
+// CRITICAL FIELDS for Highlighting
+const CRITICAL_FIELDS = [
+    "Arrear Amount", 
+    "Loan Balance",
+    "CASE NO", 
+    "CASENOSec9" 
+];
+
+
+// Helper function to format date strings from Google Sheets to dd/mm/yyyy
+function formatDate(dateValue) {
+    if (!dateValue || dateValue === 'N/A' || String(dateValue).startsWith('18')) {
+        return dateValue;
+    }
+    
+    let date;
 
     // 1. Try to parse as a standard JavaScript date
     date = new Date(dateValue);
