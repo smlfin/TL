@@ -339,12 +339,18 @@ document.addEventListener('DOMContentLoaded', initialLoad);
 // 3. DATA FETCHING AND DROPDOWN POPULATION
 // ====================================================================
 
+/**
+ * Loads all data from the API. Includes cache-busting to ensure fresh data on every load.
+ */
 async function initialLoad() {
     LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns... (This may take a moment)';
     try {
-        const response = await fetch(API_URL, {
+        // --- FIX: Add cache-busting to the GET request URL ---
+        const cacheBustingURL = `${API_URL}?t=${new Date().getTime()}`;
+        const response = await fetch(cacheBustingURL, {
             method: 'GET',
-            mode: 'cors' 
+            mode: 'cors',
+            cache: 'no-cache' // Explicitly tell the browser not to use its cache
         });
 
         if (!response.ok) {
@@ -530,7 +536,7 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 
 // 4.4. Save new status and trigger full reload/re-render (Fixed Logic)
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    const originalStatus = tdElement.querySelector('.status-select').dataset.original-status;
+    const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
 
     if (newStatus === originalStatus) {
         alert("Status is unchanged. Aborting save.");
@@ -567,19 +573,11 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result.status === 'success') {
-            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
+            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. The page will now reload all data to confirm the change.`);
             
-            // 1. Find and **optimistically update the local ALL_RECORDS cache** immediately.
-            const recordIndex = ALL_RECORDS.findIndex(record => String(record["Loan No"]).trim() === loanNo);
-            if (recordIndex !== -1) {
-                ALL_RECORDS[recordIndex][STATUS_FIELD] = newStatus;
-            }
-            
-            // 2. Re-render the entire summary table using the now-updated local cache.
-            const advocateName = ADVOCATE_TRACKER_SELECT.value; 
-            if (advocateName) {
-                displayAdvocateSummary(advocateName); 
-            }
+            // --- FIX: Call initialLoad() to force a full data re-fetch from the server ---
+            // This ensures the local ALL_RECORDS cache is updated with the permanent change.
+            initialLoad();
             
         } else {
             alert(`❌ Submission Error for Loan ${loanNo}: ${result.message}`);
@@ -696,7 +694,7 @@ function displayAdvocateSummary(selectedAdvocate) {
     LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
 }
 
-// 4.6. NEW FUNCTION: Show Fee Breakdown (UPDATED FOR TDS SPLIT-UP)
+// 4.6. NEW FUNCTION: Show Fee Breakdown
 function showFeeBreakdown(buttonElement) {
     const loanNo = buttonElement.dataset.loanNo;
     const advocateName = buttonElement.dataset.advocate;
