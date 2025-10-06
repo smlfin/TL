@@ -113,7 +113,12 @@ function calculateChargesNet(record, fields) {
     return total;
 }
 
-// Function to calculate the required Advocate Fee Payment Net (Fees - TDS, ignoring GST)
+/**
+ * Function to calculate the required Advocate Fee Payment Net (Fees - TDS, ignoring GST)
+ * @param {object} record - The loan record.
+ * @param {string[]} feeFields - The list of fields containing fees (excluding GST fields).
+ * @returns {number} The net payment amount.
+ */
 function calculateAdvocateFeePaymentNet(record, feeFields) {
     let totalNet = 0;
     
@@ -134,7 +139,7 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 
 // 5) Section 138 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_138 = {
-    // These fields are used by calculateAdvocateFeePaymentNet (Fees - TDS, ignoring GST)
+    // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
     "AdvocateFeeNetFields": [
         "Initial Fee for Sec.138", 
         "TDS of Sec.138 Initial Fee", 
@@ -161,7 +166,7 @@ const CHARGE_DEFINITIONS_138 = {
 
 // 6) Section 09 Fee & Charges Definitions
 const CHARGE_DEFINITIONS_09 = {
-    // These fields are used by calculateAdvocateFeePaymentNet (Fees - TDS, ignoring GST)
+    // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
     "AdvocateFeeNetFields": [
         "Initial Fee for Sec 09", 
         "TDS of Initial Fee", 
@@ -691,7 +696,7 @@ function displayAdvocateSummary(selectedAdvocate) {
     LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
 }
 
-// 4.6. NEW FUNCTION: Show Fee Breakdown
+// 4.6. NEW FUNCTION: Show Fee Breakdown (UPDATED FOR CLARITY)
 function showFeeBreakdown(buttonElement) {
     const loanNo = buttonElement.dataset.loanNo;
     const advocateName = buttonElement.dataset.advocate;
@@ -723,85 +728,80 @@ function showFeeBreakdown(buttonElement) {
     
     let breakdownHTML = `<div class="breakdown-container">`;
     
-    // --- SEC 138 FEES ---
-    const isAdvocate138 = String(record["ADVOCATE"] || '').trim() === advocateName;
-    if (isAdvocate138) {
-        breakdownHTML += `
+    // Helper function to render a single fee section
+    const renderFeeSection = (sectionTitle, definitions, isAdvocateForSection) => {
+        if (!isAdvocateForSection) return '';
+
+        let sectionHTML = `
             <div class="breakdown-section">
-                <h4>Section 138 Fees & Charges:</h4>
+                <h4>${sectionTitle}:</h4>
+                <div class="calc-note">
+                    <span style="color: var(--color-primary); font-weight: 700;">PAYMENT CALCULATION:</span> 
+                    (Total Fee) - (Total TDS) = Total Fee Net
+                </div>
                 <table class="fee-breakdown-table">
         `;
-        let totalNet138 = 0;
+        let totalFee = 0;
+        let totalTDS = 0;
         
-        CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay.forEach(field => {
+        // --- 1. FEES & GST ---
+        definitions.AdvocateFeeFieldsDisplay.forEach(field => {
             const value = parseNumber(record[field]);
             let displayClass = '';
             
             if (field.includes("TDS")) {
-                totalNet138 -= value;
-                displayClass = 'deduction';
-            } else if (!field.includes("GST")) {
-                totalNet138 += value;
-            } else {
+                totalTDS += value;
+                return; // Skip TDS for this loop, process separately
+            } else if (field.includes("GST")) {
                 displayClass = 'gst-row';
+            } else {
+                totalFee += value;
             }
 
-            breakdownHTML += `
+            sectionHTML += `
                 <tr class="${displayClass}">
-                    <td>${field.replace("GST of", "").replace("TDS of", "")}</td>
+                    <td>${field.includes("GST") ? 'GST on ' + field.replace("GST of ", "").trim() : field.replace(/for Sec\..*|For Sec.*|Initial Fee|Final fee/g, "").trim() + ' Fee'}</td>
                     <td class="right-align">${formatCurrency(value)}</td>
                 </tr>
             `;
         });
+        
+        // --- 2. TDS DEDUCTIONS ---
+        sectionHTML += `
+            <tr class="section-fees-total">
+                <td>**Total Fee (Excluding GST):**</td>
+                <td class="right-align">${formatCurrency(totalFee)}</td>
+            </tr>
+        `;
 
-        breakdownHTML += `
+        // TDS Row (Deduction)
+        sectionHTML += `
+            <tr class="deduction">
+                <td>**(-) Less TDS:**</td>
+                <td class="right-align">${formatCurrency(totalTDS)}</td>
+            </tr>
+        `;
+        
+        // --- 3. NET TOTAL ---
+        const totalNet = totalFee - totalTDS;
+
+        sectionHTML += `
             <tr class="section-net-total">
-                <td>**Sub Total (Net of TDS, Excluding GST)**</td>
-                <td class="right-align">${formatCurrency(totalNet138)}</td>
+                <td>**TOTAL FEE NET (Fees - TDS)**</td>
+                <td class="right-align">${formatCurrency(totalNet)}</td>
             </tr>
             </table></div>
         `;
-    }
+        return sectionHTML;
+    };
+    
+    // --- SEC 138 FEES ---
+    const isAdvocate138 = String(record["ADVOCATE"] || '').trim() === advocateName;
+    breakdownHTML += renderFeeSection("Section 138 Fees & Charges", CHARGE_DEFINITIONS_138, isAdvocate138);
 
     // --- SEC 09 FEES ---
     const isAdvocate09 = String(record["Sec/9 Advocate"] || '').trim() === advocateName;
-    if (isAdvocate09) {
-        breakdownHTML += `
-            <div class="breakdown-section">
-                <h4>Section 09 Fees & Charges:</h4>
-                <table class="fee-breakdown-table">
-        `;
-        let totalNet09 = 0;
-
-        CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay.forEach(field => {
-            const value = parseNumber(record[field]);
-            let displayClass = '';
-            
-            if (field.includes("TDS")) {
-                totalNet09 -= value;
-                displayClass = 'deduction';
-            } else if (!field.includes("GST")) {
-                totalNet09 += value;
-            } else {
-                displayClass = 'gst-row';
-            }
-            
-            breakdownHTML += `
-                <tr class="${displayClass}">
-                    <td>${field.replace("GST of", "").replace("TDS of", "")}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
-        
-        breakdownHTML += `
-            <tr class="section-net-total">
-                <td>**Sub Total (Net of TDS, Excluding GST)**</td>
-                <td class="right-align">${formatCurrency(totalNet09)}</td>
-            </tr>
-            </table></div>
-        `;
-    }
+    breakdownHTML += renderFeeSection("Section 09 Fees & Charges", CHARGE_DEFINITIONS_09, isAdvocate09);
 
     breakdownHTML += `</div>`;
     breakdownCell.innerHTML = breakdownHTML;
@@ -868,7 +868,12 @@ function displayLoan() {
     if (record) {
         window.CURRENT_LOAN_RECORD = record;
         renderSnapshot(record);
+        
+        // FIX: Ensure Sections 5 and 6 are displayed by setting the toggle state before rendering.
+        ADVOCATE_FEE_TOGGLE.checked = true; // Set to true to show detailed blocks by default
+        
         renderFilteredBlocks(record, ADVOCATE_FEE_TOGGLE.checked);
+        
         ADVOCATE_FEE_CONTROLS.style.display = 'flex';
         addAccordionListeners();
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
@@ -955,6 +960,8 @@ function processValue(record, sheetHeader) {
         let displayClass = '';
         if (sheetHeader.includes("TDS")) {
             displayClass = 'minus-value'; // Highlight TDS as deduction
+        } else if (sheetHeader.includes("GST")) {
+            displayClass = 'gst-value'; // Highlight GST separately
         }
 
         return `<span class="${displayClass}">${formatCurrency(number)}</span>`;
@@ -1020,6 +1027,7 @@ function renderFilteredBlocks(record, showDetailedFees) {
     DISPLAY_BLOCKS.forEach((block, index) => {
         const isFeeBlock = index === 4 || index === 5;
         
+        // Keep Fee Blocks (5 & 6) visible only if the toggle is checked
         if (isFeeBlock && !showDetailedFees) {
             return;
         }
@@ -1146,7 +1154,7 @@ FORM.addEventListener('submit', async function(event) {
 // 7. TOGGLE WRITE FORM
 function showInputForm() {
     if (AUTH_KEY_INPUT.value === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'block';
+        FORM.style.display = 'grid'; // Changed to grid to match CSS
         AUTH_BUTTON.style.display = 'none';
         AUTH_KEY_INPUT.style.display = 'none';
         AUTH_LABEL.style.display = 'none';
