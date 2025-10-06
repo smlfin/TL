@@ -758,79 +758,77 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 // ====================================================================
 // 4.4. Save new status and trigger full reload/re-render (With Error Reversion)
 // ====================================================================
+// ---------- safer confirmSaveStatus (accepts tdElement directly) ----------
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    // Get the original status value for rollback on failure
-    const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
-    const currentAdvocate = ADVOCATE_TRACKER_SELECT.value; // Store the advocate name
+    // Defensive: ensure tdElement and selector exist
+    let originalStatus = 'Processing';
+    try {
+        const sel = tdElement.querySelector('.status-select');
+        if (sel && sel.dataset && sel.dataset.originalStatus) originalStatus = sel.dataset.originalStatus;
+    } catch (e) { /* ignore */ }
 
-    if (newStatus === originalStatus) {
-        alert("Status is unchanged. Aborting save.");
-        // Assuming cancelStatusEdit reverts the UI element to its original state
-        cancelStatusEdit(tdElement, originalStatus, loanNo, currentAdvocate);
+    const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
+
+    // No-op if unchanged
+    if (!newStatus || newStatus === originalStatus) {
+        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
     }
 
-    if (!newStatus) {
-        alert("Please select a valid status.");
-        return;
-    }
-
-    // Display saving status before API call
-    tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
-    
-    const headerName = STATUS_FIELD;
-
+    // build payload: header name must match the sheet header exactly
+    const headerName = (typeof STATUS_FIELD !== 'undefined') ? STATUS_FIELD : "Advocate Payment Status";
     const dataToSend = {
         [headerName]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE": currentAdvocate, // Used the stored value
-        "authKey": CLIENT_SIDE_AUTH_KEY
+        "ADVOCATE": currentAdvocate,
+        "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
 
     try {
+        // show saving indicator
+        if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
+
         const response = await fetch(API_URL, {
             method: 'POST',
             mode: 'cors',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(dataToSend)
         });
 
-        // 1. Check for bad HTTP status (e.g., 500, 404)
         if (!response.ok) {
-            const errorText = await response.text();
-            throw new Error(`Server returned HTTP ${response.status}.`);
+            const text = await response.text();
+            throw new Error(`HTTP ${response.status}: ${text}`);
         }
 
         const result = await response.json();
 
-        if (result.status === 'success') {
-            // SUCCESS: The data should now be permanently in the Google Sheet.
-            alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}. Reloading data...`);
-            
-            // 2. Force a full data re-fetch from the server
-            await initialLoad();
-            
-            // 3. CRITICAL ADDITION: Immediately redraw the advocate tracker table with fresh data
-            renderAdvocateSummary(currentAdvocate); 
-            
+        if (result && result.status === 'success') {
+            // On success, refresh the data and re-render the advocate summary
+            try {
+                if (typeof initialLoad === 'function') await initialLoad();
+            } catch (err) {
+                console.warn('initialLoad failed after save:', err);
+            }
+            try {
+                const adv = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : currentAdvocate;
+                if (typeof displayAdvocateSummary === 'function') displayAdvocateSummary(adv);
+            } catch (err) {
+                console.warn('displayAdvocateSummary failed after save:', err);
+            }
         } else {
-            // FAILURE: The server returned a specific error message.
-            alert(`❌ Submission Error for Loan ${loanNo}: ${result.message || 'Server returned non-success status.'}. Status reverted.`);
-            // On failure, revert back to the original status tag immediately
+            // Server returned a non-success JSON response
+            const msg = (result && result.message) ? result.message : 'Server returned non-success';
+            alert(`❌ Submission Error for Loan ${loanNo}: ${msg}. Status reverted.`);
             revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
 
     } catch (error) {
-        // CATCH: A network connection, timeout, or bad HTTP status error occurred.
         console.error("Error saving status:", error);
         alert(`❌ Network or Server Error while saving status for Loan ${loanNo}. Status reverted.`);
-        
-        // On network/critical failure, revert back to the original status tag
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
+
 
 // 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
