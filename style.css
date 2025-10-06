@@ -312,9 +312,8 @@ hr {
 
 
 /* --- PROMINENT SUBTOTAL STYLES (Blocks 5 & 6) --- */
-
 /* Highlight 1 & 2: Advocate Fee Net & Other Charges Net */
-.data-block-item.advocate-fee-net,
+.data-block-item.advocate-fee-net, 
 .data-block-item.other-charges-net {
     background-color: #e8eaf6; /* Light Blue-Gray background */
     color: #3f51b5; /* Blue text */
@@ -339,10 +338,10 @@ hr {
 
 /* Horizontal Grid Blocks (B1, B3, B5, B6) */
 .data-block.horizontal-grid .data-block-content {
-    display: grid;
+    display: grid; 
     /* 4-column layout on desktop, responsive */
     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); 
-    gap: 15px 30px; 
+    gap: 15px 30px;
 }
 
 .data-block.horizontal-grid .data-block-item {
@@ -364,7 +363,6 @@ hr {
     font-weight: 600;
     font-size: 1em;
 }
-
 
 /* Blocks 2 and 4 Side-by-Side Container */
 #detail-content-grid {
@@ -415,292 +413,55 @@ hr {
     display: flex;
     justify-content: flex-end;
     align-items: center;
-    margin-bottom: 15px;
-    padding: 10px;
-    background-color: #e3f2fd; /* Light blue background for emphasis */
-    border-radius: 6px;
-    border: 1px solid #bbdefb;
+    margin-bottom: 20px;
 }
 
-.toggle-label {
-    margin-right: 15px;
-    font-weight: 600;
-    color: var(--color-primary);
+.toggle-switch {
+    position: relative;
+    display: inline-block;
+    width: 60px;
+    height: 34px;
 }
 
-/* Toggle Switch Styles (Kept for functionality) */
-.switch { position: relative; display: inline-block; width: 50px; height: 24px; }
-.switch input { opacity: 0; width: 0; height: 0; }
+.toggle-switch input {
+    opacity: 0;
+    width: 0;
+    height: 0;
+}
+
 .slider {
-  position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0;
-  background-color: #ccc; -webkit-transition: .4s; transition: .4s; border-radius: 34px;
-}
-.slider:before {
-  position: absolute; content: ""; height: 16px; width: 16px; left: 4px; bottom: 4px;
-  background-color: white; -webkit-transition: .4s; transition: .4s; border-radius: 50%;
-}
-input:checked + .slider { background-color: var(--color-primary); }
-input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transform: translateX(26px); transform: translateX(26px); }
-
-
-/* --- 7. ADVOCATE PAYMENT TRACKER STYLES --- */
-.total-color-text {
-    color: #f57c00; /* Orange for emphasis */
-    font-weight: 700;
-}
-
-#advocate-payments-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 15px;
-    font-size: 1em;
-}
-
-#advocate-payments-table th,
-#advocate-payments-table td {
-    padding: 12px 15px;
-    text-align: left;
-    border-bottom: 1px solid var(--color-border);
-}
-
-#advocate-payments-table th {
-    background-color: #e3f2fd; /* Light blue header */
-    color: var(--color-primary);
-    font-weight: 600;
-    text-transform: uppercase;
-    font-size: 0.9em;
-}
-
-#advocate-payments-table tr:hover {
-    background-color: #f8fafd;
-}
-
-#advocate-payments-table td.right-align,
-#advocate-payments-table th.right-align {
-    text-align: right;
-}
-
-/* Grand Total Footer */
-#advocate-payments-table tfoot td {
-    font-weight: 700;
-    border-top: 3px solid var(--color-primary);
-    background-color: var(--color-total); 
-}
-
-#advocate-payments-table tfoot .total-label {
-    text-align: right;
-    font-size: 1.1em;
-}
-#advocate-payments-table tfoot .total-value {
-    color: var(--color-danger);
-    font-size: 1.2em;
-}
-
-.breakdown-button {
-    background: none;
-    border: none;
-    color: var(--color-primary);
-    font-weight: 600;
+    position: absolute;
     cursor: pointer;
-    padding: 0;
-    text-decoration: underline;
-    transition: color 0.15s;
-    font-size: 1em; /* Inherit font size from table cell */
-}
-
-.breakdown-button:hover {
-    color: #1565c0;
-}
-
-/* --- NEW STATUS DROPDOWN STYLES --- */
-.status-dropdown {
-    padding: 5px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    cursor: pointer; /* Use pointer to indicate clicking triggers action (the modal) */
-    background-color: #f5f5f5; /* Light gray when disabled/unset */
-    color: #777;
-    font-size: 0.9em;
-    width: 110px;
-    transition: background-color 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.status-dropdown.authorized-active {
-    cursor: pointer;
-    background-color: #e8f5e9; /* Light green when active/enabled */
-    border-color: var(--color-success);
-    color: #2e7d32;
-    font-weight: 600;
-}
-
-
-/* --- 8. MODAL/POPUP STYLES --- */
-.modal-overlay {
-    position: fixed;
     top: 0;
     left: 0;
-    width: 100%;
-    height: 100%;
-    background-color: rgba(0, 0, 0, 0.6);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
+    right: 0;
+    bottom: 0;
+    background-color: #ccc;
+    transition: 0.4s;
+    border-radius: 34px;
 }
 
-.modal-content {
-    background-color: var(--color-surface);
-    padding: 30px;
-    border-radius: 8px;
-    box-shadow: var(--shadow-medium);
-    width: 90%;
-    max-width: 600px;
-    position: relative;
-    max-height: 80vh;
-    overflow-y: auto;
-}
-
-/* NEW: Style for the passcode authentication modal */
-.modal-content.small-modal {
-    max-width: 400px;
-    padding: 25px;
-    text-align: center;
-}
-.modal-content.small-modal h4 {
-    color: var(--color-primary);
-    margin: 0 0 10px 0;
-    border: none;
-    padding: 0;
-}
-.modal-content.small-modal p {
-    color: var(--color-secondary);
-    margin-bottom: 15px;
-}
-
-#status-passcode-input {
-    width: 100%;
-    padding: 10px;
-    margin: 10px 0;
-    box-sizing: border-box;
-    border: 1px solid var(--color-border);
-    border-radius: 4px;
-    font-size: 1em;
-}
-
-#passcode-submit-button {
-    width: 100%;
-    padding: 12px;
-    background-color: var(--color-primary);
-    color: white;
-    border: none;
-    border-radius: 4px;
-    cursor: pointer;
-    font-weight: 600;
-    transition: background-color 0.2s;
-}
-#passcode-submit-button:hover {
-    background-color: #1565c0;
-}
-
-
-.modal-content h3 {
-    margin-top: 0;
-    color: var(--color-primary);
-}
-
-.modal-content h4 {
-    color: var(--color-secondary);
-    margin-top: 20px;
-    border-bottom: 1px dashed var(--color-border);
-    padding-bottom: 5px;
-}
-
-.calc-note {
-    font-size: 0.9em;
-    font-style: italic;
-    color: var(--color-danger);
-    font-weight: 600;
-    margin-bottom: 10px;
-}
-
-.close-button {
+.slider:before {
     position: absolute;
-    top: 10px;
-    right: 20px;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-    color: #999;
+    content: "";
+    height: 26px;
+    width: 26px;
+    left: 4px;
+    bottom: 4px;
+    background-color: white;
+    transition: 0.4s;
+    border-radius: 50%;
 }
 
-.breakdown-table {
-    width: 100%;
-    border-collapse: collapse;
-    margin-top: 10px;
-    font-size: 0.95em;
+input:checked + .slider {
+    background-color: var(--color-primary);
 }
 
-.breakdown-table th,
-.breakdown-table td {
-    padding: 8px;
-    border: 1px solid #f0f0f0;
+input:checked + .slider:before {
+    transform: translateX(26px);
 }
 
-.breakdown-table th {
-    background-color: #f4f7f9;
-}
-
-.breakdown-table td:last-child {
-    text-align: right;
-    font-weight: 500;
-}
-
-/* Visual differentiation for rows */
-.breakdown-table .gst-value {
-    background-color: #fce4ec; /* Light pink for GST */
-    color: #ad1457; /* Dark pink text */
-}
-
-.breakdown-table .gst-label {
-    font-size: 0.85em;
-    font-weight: 500;
-    color: #888;
-    margin-left: 10px;
-    white-space: nowrap;
-}
-
-.breakdown-table .fee-value {
-    background-color: #e8f5e9; /* Light green for Fee (positive) */
-    color: #2e7d32;
-}
-
-.section-total-row td {
-    font-weight: 700 !important;
-    background-color: #f5f5f5; /* Light gray for summary rows */
-    border-top: 1px solid #ccc;
-}
-
-/* Specific Summary Row Styles */
-.gst-summary {
-    background-color: #fce4ec !important;
-    color: #ad1457;
-}
-
-.final-net-payment {
-    background-color: var(--color-total) !important;
-    color: var(--color-primary);
-    font-size: 1.1em;
-    border-top: 3px solid var(--color-primary) !important;
-}
-
-.final-net-payment td:last-child {
-    color: var(--color-danger);
-    font-size: 1.1em;
-}
-
-.minus-value {
-    color: var(--color-danger); /* Highlight deducted amounts */
-}
+/* --- 7. ADVOCATE TRACKER STYLES (New Section) --- */
 
 .grand-total-summary {
     display: flex;
@@ -709,9 +470,91 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
     font-size: 1.3em;
     font-weight: 700;
     padding: 15px;
-    background-color: var(--color-total);
-    border: 1px solid #ffc107;
+    background-color: #e8f5e9; /* Light green/success background for tracker total */
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
+    border-radius: 6px;
     margin-top: 20px;
+}
+
+.grand-total-summary .total-value {
+    color: #1b5e20;
+}
+
+.advocate-summary-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-top: 20px;
+    box-shadow: var(--shadow-light);
+}
+
+.advocate-summary-table th, 
+.advocate-summary-table td {
+    padding: 10px 12px;
+    text-align: left;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.advocate-summary-table th {
+    background-color: #e3f2fd; /* Light blue header */
+    color: var(--color-primary);
+    font-weight: 600;
+    text-transform: uppercase;
+    font-size: 0.9em;
+}
+
+.advocate-summary-table tbody tr:hover {
+    background-color: #f5f5f5;
+}
+
+.currency-value {
+    text-align: right;
+    font-weight: 500;
+    min-width: 100px;
+}
+
+/* Status Tag Styling (FIX for Status Display) */
+.status-tag {
+    display: inline-block;
+    padding: 4px 8px;
+    border-radius: 12px;
+    font-size: 0.8em;
+    font-weight: 700;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.status-paid {
+    background-color: #e8f5e9; /* Very light green */
+    color: var(--color-success); /* Darker green text */
+    border: 1px solid var(--color-success);
+}
+
+.status-processing, .status-n-a {
+    background-color: #fffde7; /* Very light yellow */
+    color: #f9a825; /* Amber text */
+    border: 1px solid #ffb300;
+}
+
+.status-rejected {
+    background-color: #ffebee; /* Very light red */
+    color: var(--color-danger); /* Darker red text */
+    border: 1px solid var(--color-danger);
+}
+
+.advocate-grand-total {
+    font-size: 1.1em;
+    font-weight: 700;
+    background-color: var(--color-total);
+}
+
+.advocate-grand-total td {
+    border-top: 2px solid #f57c00;
+    color: #333;
+}
+
+.advocate-grand-total .currency-value {
+    color: #000;
 }
 
 
@@ -731,25 +574,20 @@ input:checked + .slider:before { -webkit-transform: translateX(26px); -ms-transf
         flex-direction: column;
         gap: 15px;
     }
-    .search-group, .search-controls button {
+    
+    .search-controls button {
         width: 100%;
-        min-width: unset;
+    }
+
+    .data-block.horizontal-grid .data-block-content {
+        grid-template-columns: 1fr; /* Single column on small devices */
     }
     
     #detail-content-grid {
-        grid-template-columns: 1fr; /* Stack B2 and B4 on mobile */
+        grid-template-columns: 1fr;
     }
     
     #record-form {
-        grid-template-columns: 1fr; /* Stack form inputs on mobile */
-    }
-    .snapshot-item {
-        flex: 1 1 100%; /* 1 item per row on mobile */
-    }
-    .data-block-content {
-        padding: 10px;
-    }
-    .data-block.horizontal-grid .data-block-content {
-        grid-template-columns: 1fr; /* Stack grid items on mobile */
+        grid-template-columns: 1fr;
     }
 }

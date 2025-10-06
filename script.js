@@ -415,6 +415,9 @@ LOAN_SELECT.addEventListener('change', () => {
     LOADING_STATUS.textContent = 'Click "Display Loan Data"';
 });
 
+// NEW FIX: Add Event Listener for Advocate Tracker
+ADVOCATE_TRACKER_SELECT.addEventListener('change', displayAdvocateSummary);
+
 function populateLoanDropdown() {
     const selectedBranch = BRANCH_SELECT.value;
     
@@ -554,110 +557,106 @@ function renderDataItem(sheetHeader, displayName, value) {
 // Helper to process and format value
 function processValue(record, sheetHeader) {
     let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
-    
+
     // Apply date formatting
     if (DATE_FIELDS.includes(sheetHeader) && value !== 'N/A') {
         value = formatDate(value);
     }
-
+    
     // Apply currency formatting ONLY for display in the blocks
     if (CHARGE_FIELDS_FOR_SNAPSHOT.includes(sheetHeader) && value !== 'N/A') {
         const number = parseNumber(value);
         value = number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     }
+
     return value;
 }
 
 // Helper to create a subtotal row DOM element
 function createSubtotalRow(label, value, className) {
     const formattedValue = value.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
+    
     const subtotalItem = document.createElement('div');
     subtotalItem.className = `data-block-item ${className}`;
-
+    
     const totalLabelSpan = document.createElement('span');
     totalLabelSpan.className = 'item-label';
     totalLabelSpan.textContent = label;
-
+    
     const totalValueSpan = document.createElement('span');
     totalValueSpan.className = 'item-value';
     totalValueSpan.textContent = formattedValue;
-
+    
     subtotalItem.appendChild(totalLabelSpan);
     subtotalItem.appendChild(totalValueSpan);
     return subtotalItem;
 }
 
-
-// --- MODIFIED RENDER FILTERED BLOCKS FUNCTION (Fixes Accordion and Blocks 5/6) ---
+// Function to render the blocks view for a single loan
 function renderFilteredBlocks(record, isAdvocateFeeOnly) {
     DATA_BLOCKS_CONTAINER.innerHTML = '';
     DISPLAY_LOAN_NO.textContent = record["Loan No"] || 'N/A';
-    
+
     const blockElements = {};
-    
+
     DISPLAY_BLOCKS.forEach((blockConfig, index) => {
         const block = document.createElement('div');
         const blockNumber = index + 1;
         block.id = `block-${blockNumber}`;
         block.classList.add('data-block');
-
+        
         const isChargeBlock = blockNumber === 5 || blockNumber === 6;
         const isCollapsible = blockNumber >= 1 && blockNumber <= 4; // Blocks 1-4 are collapsible
-        
+
         // Add layout classes
-        if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) { 
+        if (blockNumber === 1 || blockNumber === 3 || isChargeBlock) {
             block.classList.add('horizontal-grid');
-        } else if (blockNumber === 2 || blockNumber === 4) { 
-             block.classList.add('vertical-list');
+        } else if (blockNumber === 2 || blockNumber === 4) {
+            block.classList.add('vertical-list');
         }
 
         // --- Block Header ---
         const header = document.createElement('div');
-        header.classList.add('block-header'); 
-        
+        header.classList.add('block-header');
         if (isCollapsible) {
             header.classList.add('accordion-header', 'collapsed'); // Start collapsed
         }
-
+        
         const title = document.createElement('h3');
         title.textContent = blockConfig.title;
         header.appendChild(title);
-        
+
         if (isCollapsible) {
             const icon = document.createElement('span');
             icon.classList.add('accordion-icon');
             icon.textContent = '▶'; // Right arrow icon
             header.appendChild(icon);
         }
-        
         block.appendChild(header);
 
-        
         // --- Content Wrapper (Collapsible or Always Expanded) ---
         const contentWrapper = document.createElement('div');
-        contentWrapper.className = 'data-block-content-wrapper'; 
-
+        contentWrapper.className = 'data-block-content-wrapper';
         if (isCollapsible) {
-            contentWrapper.classList.add('accordion-content'); 
+            contentWrapper.classList.add('accordion-content');
         } else {
             contentWrapper.classList.add('always-expanded'); // Blocks 5/6 always visible
         }
-        
+
         const innerContent = document.createElement('div');
         innerContent.className = 'data-block-content';
         
         let allFields = Object.entries(blockConfig.fields);
-        let fieldsToRender = allFields; 
+        let fieldsToRender = allFields;
 
-        // --- Filtering and Rendering Logic for All Blocks (including Charge Blocks 5 & 6) ---
-        
+
+        // 1. Rendering Logic for All Blocks (including Charge Blocks 5 & 6)
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+
             // Use the full display list for rendering individual items
             const allChargeFieldsDisplay = [...definitions.AdvocateFeeFieldsDisplay, ...definitions.OtherChargesFields];
-            
-            // Generate list of fields to render
+
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Filter to show only Advocate Fee related fields
                 fieldsToRender = allChargeFieldsDisplay.filter(sheetHeader => definitions.AdvocateFeeFieldsDisplay.includes(sheetHeader));
@@ -665,14 +664,14 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 // TOGGLE OFF: Show all charge fields
                 fieldsToRender = allChargeFieldsDisplay;
             }
-            
+
             // Render charge fields
             fieldsToRender.forEach(sheetHeader => {
                 const displayName = blockConfig.fields[sheetHeader];
                 const value = processValue(record, sheetHeader);
                 innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
             });
-            
+
         } else {
             // Standard blocks (1, 2, 3, 4): render all fields
             fieldsToRender.forEach(([sheetHeader, displayName]) => {
@@ -680,7 +679,8 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 innerContent.appendChild(renderDataItem(sheetHeader, displayName, value));
             });
         }
-        
+
+
         // 2. Append Subtotal Rows for Charge Blocks (5 & 6)
         if (isChargeBlock) {
             const definitions = blockNumber === 5 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
@@ -690,20 +690,19 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
             const advFeeNetTotal = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
             
             // 2. Other Charges Net: Use the old function (Simple sum of other charges, NO TDS involved here)
-            const otherChargesNetTotal = calculateChargesNet(record, definitions.OtherChargesFields.map(f => f)); 
+            const otherChargesNetTotal = calculateChargesNet(record, definitions.OtherChargesFields.map(f => f));
 
             if (isAdvocateFeeOnly) {
                 // TOGGLE ON: Only show one total row (Advocate Fee Total)
                 const totalItem = createSubtotalRow(
                     `${sectionName} Advocate Fee Total (Net of TDS)`, 
-                    advFeeNetTotal, // Use the new Fee - TDS total
+                    advFeeNetTotal, 
                     'subtotal-row section-grand-total'
                 );
                 innerContent.appendChild(totalItem);
-                
             } else {
                 // TOGGLE OFF: Show all three required subtotal rows
-
+                
                 // Subtotal 1: Advocate Fee Net (Fee - TDS)
                 const advFeeItem = createSubtotalRow(
                     "Advocate Fee Net (Fee - TDS)", 
@@ -719,7 +718,7 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                     'subtotal-row other-charges-net'
                 );
                 innerContent.appendChild(otherChargesItem);
-                
+
                 // Subtotal 3: Sub Section Total
                 const subSectionTotal = advFeeNetTotal + otherChargesNetTotal;
                 const totalItem = createSubtotalRow(
@@ -730,557 +729,190 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
                 innerContent.appendChild(totalItem);
             }
         }
-
+        
+        // Finalize block content
         contentWrapper.appendChild(innerContent);
         block.appendChild(contentWrapper);
-        blockElements[blockNumber] = block;
+        blockElements[`block${blockNumber}`] = block;
     });
 
-    // 3. Assemble the DOM structure in the correct order: B1, Grid (B2, B4), B3, B5, B6
-    
-    const detailGridWrapper = document.createElement('div');
-    detailGridWrapper.id = 'detail-content-grid';
-    
-    if (blockElements[2]) detailGridWrapper.appendChild(blockElements[2]);
-    if (blockElements[4]) detailGridWrapper.appendChild(blockElements[4]);
-    
-    DATA_BLOCKS_CONTAINER.innerHTML = '';
-    
-    if (blockElements[1]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[1]);
-    if (detailGridWrapper.children.length > 0) {
-        DATA_BLOCKS_CONTAINER.appendChild(detailGridWrapper);
-    }
-    if (blockElements[3]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[3]);
-    if (blockElements[5]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[5]);
-    if (blockElements[6]) DATA_BLOCKS_CONTAINER.appendChild(blockElements[6]);
+    // --- Dynamic Layout Arrangement ---
+    // Section 1 is full width
+    DATA_BLOCKS_CONTAINER.appendChild(blockElements.block1);
+
+    // Sections 2 and 4 are side-by-side
+    const detailContentGrid = document.createElement('div');
+    detailContentGrid.id = 'detail-content-grid';
+    detailContentGrid.appendChild(blockElements.block2);
+    detailContentGrid.appendChild(blockElements.block4);
+    DATA_BLOCKS_CONTAINER.appendChild(detailContentGrid);
+
+    // Sections 3, 5, 6 are full width
+    DATA_BLOCKS_CONTAINER.appendChild(blockElements.block3);
+    DATA_BLOCKS_CONTAINER.appendChild(blockElements.block5);
+    DATA_BLOCKS_CONTAINER.appendChild(blockElements.block6);
 }
-// --- END MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 
+// Function to handle the accordion toggle
+function addAccordionListeners() {
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.onclick = function() {
+            const content = this.nextElementSibling;
+            
+            this.classList.toggle('expanded');
+            content.classList.toggle('expanded');
 
-// --- NEW ADVOCATE PAYMENT TRACKER LOGIC ---
+            // Find and rotate the icon
+            const icon = this.querySelector('.accordion-icon');
+            if (icon) {
+                icon.textContent = this.classList.contains('expanded') ? '▼' : '▶';
+            }
+        };
+    });
+}
 
-ADVOCATE_TRACKER_SELECT.addEventListener('change', (e) => {
-    const selectedAdvocate = e.target.value;
-    if (selectedAdvocate) {
-        displayAdvocatePayments(selectedAdvocate);
-    } else {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+// Toggles the view between 'All Charges' and 'Advocate Fee Only'
+ADVOCATE_FEE_TOGGLE.addEventListener('change', (e) => {
+    if (window.CURRENT_LOAN_RECORD) {
+        renderFilteredBlocks(window.CURRENT_LOAN_RECORD, e.target.checked);
     }
 });
 
-// Helper function to get the payment breakdown for a single loan/advocate
-function getAdvocatePaymentDetails(record, advocateName) {
-    const adv138Name = String(record["ADVOCATE"]).trim();
-    const adv09Name = String(record["Sec/9 Advocate"]).trim();
-    
-    let sec138Net = 0;
-    let sec09Net = 0;
 
-    // Calculate Sec 138 fees if the selected advocate is the Sec 138 advocate
-    if (adv138Name === advocateName) {
-        // Use the new calculation: Fee - TDS, NO GST
-        sec138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-    }
-    
-    // Calculate Sec 09 fees if the selected advocate is the Sec 09 advocate
-    if (adv09Name === advocateName) {
-        // Use the new calculation: Fee - TDS, NO GST
-        sec09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-    }
-    
-    // Combine the amounts for the final net payment for this advocate on this loan
-    const totalAdvocateNet = sec138Net + sec09Net;
-    
-    return {
-        sec138Net,
-        sec09Net,
-        totalAdvocateNet,
-        is138: adv138Name === advocateName,
-        is09: adv09Name === advocateName,
-        // Also return the full fields display list for the breakdown popup
-        sec138Fields: CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay,
-        sec09Fields: CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay,
-    };
-}
+// --- 4. ADVOCATE TRACKER LOGIC (FIX: Implemented missing logic) ---
+function displayAdvocateSummary() {
+    const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+    ADVOCATE_PAYMENTS_VIEW.innerHTML = ''; // Clear previous content
 
-
-function displayAdvocatePayments(selectedAdvocate) {
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>Loading payments for <b>${selectedAdvocate}</b>...</p>`;
-    
-    let grandTotal = 0;
-    const loanPayments = [];
-
-    // 1. Filter Records and Calculate Payments
-    ALL_RECORDS.forEach(record => {
-        const adv138Name = String(record["ADVOCATE"]).trim();
-        const adv09Name = String(record["Sec/9 Advocate"]).trim();
-        
-        // Only include loans where the selected advocate is involved
-        if (adv138Name === selectedAdvocate || adv09Name === selectedAdvocate) {
-            const details = getAdvocatePaymentDetails(record, selectedAdvocate);
-            
-            // Only list loans with a non-zero payment amount
-            if (details.totalAdvocateNet !== 0) {
-                loanPayments.push({
-                    loanNo: record["Loan No"],
-                    branch: record["Loan Branch"],
-                    details: details,
-                    fullRecord: record 
-                });
-                grandTotal += details.totalAdvocateNet;
-            }
-        }
-    });
-    
-    // 2. Render Results
-    let html = `<h3>Payment Summary for: <span class="total-color-text">${selectedAdvocate}</span></h3>`;
-
-    if (loanPayments.length === 0) {
-        html += `<p style="color: var(--color-danger); font-weight: bold;">No net payments found for ${selectedAdvocate} across all loans.</p>`;
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = html;
+    if (!selectedAdvocate) {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
         return;
     }
+
+    // Filter records for the selected advocate in either Section 138 or Section 09
+    const advocateRecords = ALL_RECORDS.filter(record => {
+        const adv138 = String(record["ADVOCATE"]).trim();
+        const adv09 = String(record["Sec/9 Advocate"]).trim();
+        return adv138 === selectedAdvocate || adv09 === selectedAdvocate;
+    });
+
+    if (advocateRecords.length === 0) {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No records found for Advocate: <strong>${selectedAdvocate}</strong>.</p>`;
+        return;
+    }
+
+    let totalAdvocateFeePaid = 0;
     
-    // Payments Table
-    html += `
-        <table id="advocate-payments-table">
+    // Start generating the table
+    let tableHTML = `
+        <table class="advocate-summary-table">
             <thead>
                 <tr>
                     <th>Loan No</th>
                     <th>Branch</th>
-                    <th>Section(s)</th>
-                    <th>Status</th> <th class="right-align">Advocate Net</th>
+                    <th>Section</th>
+                    <th>Fee Net (INR)</th>
+                    <th>Other Charges Net (INR)</th>
+                    <th class="status-column">Status</th>
                 </tr>
             </thead>
             <tbody>
     `;
 
-    loanPayments.sort((a, b) => (a.loanNo > b.loanNo) ? 1 : -1); // Sort by Loan No.
-    
-    loanPayments.forEach(payment => {
-        const sections = [];
-        if (payment.details.is138) sections.push("Sec 138");
-        if (payment.details.is09) sections.push("Sec 09");
-
-        const formattedNet = payment.details.totalAdvocateNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-        
-        // NEW STATUS DROPDOWN RENDERING
-        const currentStatus = String(payment.fullRecord[STATUS_FIELD] || 'Unset').trim();
-        const statusOptionsHtml = STATUS_OPTIONS.map(opt => 
-            `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${opt}</option>`
-        ).join('');
-        
-        const statusDropdownHtml = `
-            <select class="status-dropdown" 
-                    data-loan-no="${payment.loanNo}" 
-                    data-advocate="${selectedAdvocate}"
-                    data-original-status="${currentStatus}"
-                    disabled
-            >
-                <option value="Unset" ${currentStatus === 'Unset' ? 'selected' : ''} disabled>-- ${currentStatus} --</option>
-                ${statusOptionsHtml}
-            </select>
-        `;
-
-        html += `
-            <tr>
-                <td>${payment.loanNo}</td>
-                <td>${payment.branch}</td>
-                <td>${sections.join(' & ')}</td>
-                <td>${statusDropdownHtml}</td> <td class="right-align">
-                    <button class="breakdown-button" 
-                            data-loan-no="${payment.loanNo}" 
-                            data-advocate="${selectedAdvocate}"
-                            data-net="${payment.details.totalAdvocateNet}"
-                            >
-                        ${formattedNet}
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
-    
-    // Grand Total Row
-    const formattedGrandTotal = grandTotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    html += `
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="4" class="right-align total-label">GRAND TOTAL:</td>
-                    <td class="right-align total-value">${formattedGrandTotal}</td>
-                </tr>
-            </tfoot>
-        </table>
-    `;
-
-    // 3. Render and Attach Listeners
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = html;
-    
-    // NEW: Add listener to all disabled dropdowns to trigger auth
-    document.querySelectorAll('.status-dropdown').forEach(select => {
-        select.addEventListener('mousedown', function(e) {
-            // Prevent the dropdown from opening immediately if disabled
-            if (this.disabled) {
-                e.preventDefault(); 
-                showPasscodePopup(this);
-            }
-        });
-    });
-
-    document.querySelectorAll('.breakdown-button').forEach(button => {
-        button.addEventListener('click', (e) => showPaymentBreakdownPopup(e.target, selectedAdvocate));
-    });
-}
-
-// NEW FUNCTION: Targeted write operation for status
-async function updatePaymentStatus(loanNo, newStatus, selectElement) {
-    const dataToSend = {};
-    // Key to identify the record is Loan No.
-    dataToSend["Loan No"] = loanNo; 
-    // The column to update
-    dataToSend[STATUS_FIELD] = newStatus; 
-    // The auth key is needed for the write function
-    dataToSend["authKey"] = CLIENT_SIDE_AUTH_KEY; 
-
-    // Visually update the dropdown text while waiting
-    selectElement.querySelector('option[disabled]').textContent = `...${newStatus}...`;
-
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            mode: 'cors', 
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            // Success: Update the UI to reflect the new, confirmed status
-            const currentAdvocate = ADVOCATE_TRACKER_SELECT.value;
-            if (currentAdvocate) {
-                // A full reload of the data is the safest way to refresh the UI and ALL_RECORDS
-                await initialLoad();
-                 // Re-select the advocate to refresh the table with fresh data
-                displayAdvocatePayments(currentAdvocate);
-            }
-            
-        } else {
-            // Failure: Reset the dropdown to its last value and show an error
-            alert(`❌ Status Update Error for Loan ${loanNo}: ${result.message}. Please try again.`);
-            selectElement.disabled = true;
-            selectElement.classList.remove('authorized-active');
-            // Re-render the table to reset the UI safely
-            displayAdvocatePayments(ADVOCATE_TRACKER_SELECT.value);
-        }
-
-    } catch (error) {
-        alert(`❌ Network Error. Could not update status for Loan ${loanNo}.`);
-        console.error("Status update error:", error);
-        // Re-render the table to reset the UI safely
-        displayAdvocatePayments(ADVOCATE_TRACKER_SELECT.value);
-    }
-}
-
-// NEW FUNCTION: Show Passcode Popup and handle authentication
-function showPasscodePopup(selectElement) {
-    const loanNo = selectElement.getAttribute('data-loan-no');
-    
-    const popupHTML = `
-        <div id="passcode-modal" class="modal-overlay">
-            <div class="modal-content small-modal">
-                <span class="close-button">&times;</span>
-                <h4>Authorize Status Change for Loan ${loanNo}</h4>
-                <p>Enter the passcode to enable the status dropdown:</p>
-                <input type="password" id="status-passcode-input" placeholder="Passcode">
-                <button id="passcode-submit-button">Submit</button>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', popupHTML);
-    const modal = document.getElementById('passcode-modal');
-    const input = document.getElementById('status-passcode-input');
-    const submitButton = document.getElementById('passcode-submit-button');
-    const originalStatus = selectElement.getAttribute('data-original-status');
-
-    setTimeout(() => input.focus(), 100);
-
-    const closeModal = () => modal.remove();
-    
-    modal.querySelector('.close-button').addEventListener('click', closeModal);
-    modal.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal-overlay')) {
-            closeModal();
-        }
-    });
-
-    const attemptAuth = () => {
-        const enteredKey = input.value;
-        if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-            
-            // 1. SUCCESS: Enable the dropdown and highlight
-            selectElement.disabled = false;
-            selectElement.classList.add('authorized-active');
-            // Change disabled option text to reflect that a selection is now possible
-            selectElement.querySelector('option[disabled]').textContent = `-- Select New Status --`;
-            
-            // 2. Open the dropdown visually (trick to make it look like it was clicked)
-            const event = new MouseEvent('mousedown');
-            selectElement.dispatchEvent(event);
-
-            // 3. Remove the modal
-            closeModal(); 
-            
-            // 4. Attach ONE-TIME change listener
-            setTimeout(() => {
-                 selectElement.addEventListener('change', function oneTimeChangeHandler() {
-                    const newStatus = this.value;
-                    
-                    // a) Immediately disable the dropdown again and remove active class
-                    this.disabled = true;
-                    this.classList.remove('authorized-active');
-                    
-                    // b) Remove this listener
-                    this.removeEventListener('change', oneTimeChangeHandler);
-                    
-                    // c) Perform the write operation
-                    updatePaymentStatus(loanNo, newStatus, this);
-                });
-            }, 100);
-
-        } else {
-            alert('Incorrect passcode. Status change not authorized.');
-            input.value = '';
-            // Restore original text on disabled element
-            selectElement.querySelector('option[disabled]').textContent = `-- ${originalStatus} --`;
-        }
+    // Helper function to format currency (non-signed, for table display)
+    const formatCurrency = (amount) => {
+        const number = parseNumber(amount);
+        return number.toLocaleString('en-IN', { minimumFractionDigits: 2 });
     };
-    
-    submitButton.addEventListener('click', attemptAuth);
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptAuth();
-    });
-}
-// --- END NEW ADVOCATE PAYMENT TRACKER LOGIC ---
 
-// NEW FUNCTION: Show Payment Breakdown Popup (Unchanged, kept for completeness)
-function showPaymentBreakdownPopup(buttonElement, advocateName) {
-    const loanNo = buttonElement.getAttribute('data-loan-no');
-    
-    // Find the record to get the full fee details for the breakdown
-    const record = ALL_RECORDS.find(r => 
-        String(r["Loan No"]).trim() === loanNo && 
-        (String(r["ADVOCATE"]).trim() === advocateName || String(r["Sec/9 Advocate"]).trim() === advocateName)
-    );
-    
-    if (!record) {
-        alert("Error: Could not find the corresponding loan record for breakdown.");
-        return;
-    }
-    
-    const details = getAdvocatePaymentDetails(record, advocateName);
-    const netTotal = details.totalAdvocateNet;
-    
-    let breakdownHTML = `
-        <div id="payment-breakdown-modal" class="modal-overlay">
-            <div class="modal-content">
-                <span class="close-button">&times;</span>
-                <h3>Payment Breakdown for ${advocateName}</h3>
-                <p><b>Loan No:</b> ${loanNo} | <b>Branch:</b> ${record["Loan Branch"]}</p>
-                <hr>
-                
-                ${details.is138 ? renderSectionBreakdown(record, details.sec138Fields, "Section 138 Fees", details.sec138Net) : ''}
-                
-                ${details.is09 ? renderSectionBreakdown(record, details.sec09Fields, "Section 09 Fees", details.sec09Net) : ''}
+    advocateRecords.forEach(record => {
+        const loanNo = record["Loan No"];
+        const loanBranch = record["Loan Branch"];
 
-                <div class="grand-total-summary">
-                    <span>FINAL NET PAYMENT</span>
-                    <span>${netTotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</span>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', breakdownHTML);
-    
-    const modal = document.getElementById('payment-breakdown-modal');
-    
-    // Close modal listeners
-    modal.querySelector('.close-button').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal-overlay')) {
-            modal.remove();
-        }
-    });
-}
-
-// Helper to render the detailed breakdown table for a section (Unchanged, kept for completeness)
-function renderSectionBreakdown(record, fields, sectionTitle, sectionNet) {
-    let tableRows = '';
-    let totalFeeBeforeTDS = 0;
-    let totalGST = 0;
-    let totalTDS = 0;
-    
-    fields.forEach(field => {
-        // Only include fields that have a value greater than 0
-        const rawValue = record[field];
-        const value = parseNumber(rawValue);
+        // Check for Sec 138 fees
+        const advFee138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+        const otherCharges138Net = calculateChargesNet(record, CHARGE_DEFINITIONS_138.OtherChargesFields.map(f => f));
         
-        if (value !== 0) {
-            const isTDS = field.includes("TDS");
-            const isGST = field.includes("GST");
-            const isFee = !isTDS && !isGST;
-            
-            const sign = isTDS ? -1 : 1;
-            const amount = value * sign;
+        // Check for Sec 09 fees
+        const advFee09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+        const otherCharges09Net = calculateChargesNet(record, CHARGE_DEFINITIONS_09.OtherChargesFields.map(f => f));
+        
+        // FIX: Read the status field, default to 'N/A' and create a safe CSS class
+        const paymentStatus = String(record[STATUS_FIELD]).trim() || 'N/A'; 
+        
+        // Standardize status class for CSS (e.g., "Paid" -> "paid", "Processing" -> "processing")
+        const statusClass = paymentStatus.toLowerCase().replace(/\s/g, '-').replace(/[^a-z0-9-]/g, '');
 
-            // Track totals for the summary rows
-            if (isFee) {
-                totalFeeBeforeTDS += value;
-            } else if (isGST) {
-                totalGST += value;
-            } else if (isTDS) {
-                // We track TDS as a positive amount for the summary, then subtract it.
-                totalTDS += value; 
-            }
 
-            // Determine row class for clear visual differentiation
-            let rowClass = '';
-            let labelSuffix = '';
-            if (isGST) {
-                rowClass = 'gst-value'; 
-                labelSuffix = '<span class="gst-label">(Not included in Net Payment)</span>';
-            } else if (isTDS) {
-                rowClass = 'minus-value';
-            } else {
-                rowClass = 'fee-value'; 
-            }
-            
-            tableRows += `
-                <tr class="${rowClass}">
-                    <td>${field} ${labelSuffix}</td>
-                    <td class="right-align">${amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+        // If there are fees for Sec 138 AND the advocate is the one assigned to 138
+        if (advFee138Net !== 0 && String(record["ADVOCATE"]).trim() === selectedAdvocate) {
+            totalAdvocateFeePaid += advFee138Net;
+            tableHTML += `
+                <tr>
+                    <td>${loanNo}</td>
+                    <td>${loanBranch}</td>
+                    <td>Section 138</td>
+                    <td class="currency-value">${formatCurrency(advFee138Net)}</td>
+                    <td class="currency-value">${formatCurrency(otherCharges138Net)}</td>
+                    <td><span class="status-tag status-${statusClass}">${paymentStatus}</span></td>
+                </tr>
+            `;
+        }
+
+        // If there are fees for Sec 09 AND the advocate is the one assigned to 09
+        if (advFee09Net !== 0 && String(record["Sec/9 Advocate"]).trim() === selectedAdvocate) {
+            totalAdvocateFeePaid += advFee09Net;
+            tableHTML += `
+                <tr>
+                    <td>${loanNo}</td>
+                    <td>${loanBranch}</td>
+                    <td>Section 09</td>
+                    <td class="currency-value">${formatCurrency(advFee09Net)}</td>
+                    <td class="currency-value">${formatCurrency(otherCharges09Net)}</td>
+                    <td><span class="status-tag status-${statusClass}">${paymentStatus}</span></td>
                 </tr>
             `;
         }
     });
 
-    if (tableRows === '') return ''; // Hide section if all fields are zero
-    
-    // The final net calculation is: (Total Fees) - (Total TDS)
-    // totalFeeBeforeTDS holds the sum of "Initial Fee" and "Final Fee"
-    const calculatedNet = totalFeeBeforeTDS - totalTDS;
-
-    const gstTotalRow = totalGST > 0 ? `
-        <tr class="section-total-row gst-summary">
-            <td>Total GST:</td>
-            <td class="right-align">${totalGST.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-        </tr>
-    ` : '';
-    
-    return `
-        <h4>${sectionTitle} Calculation</h4>
-        <p class="calc-note">Note: Net Payment calculation uses <b>Fee - TDS</b> and <b>excludes GST</b>.</p>
-        <table class="breakdown-table">
-            <thead>
-                <tr><th>Fee/Charge Description</th><th class="right-align">Amount</th></tr>
-            </thead>
-            <tbody>
-                ${tableRows}
+    tableHTML += `
             </tbody>
             <tfoot>
-                <tr class="section-total-row">
-                    <td>Total Fees (Gross):</td>
-                    <td class="right-align">${totalFeeBeforeTDS.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-                <tr class="section-total-row">
-                    <td>Total TDS Deduction:</td>
-                    <td class="right-align minus-value">${(totalTDS * -1).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-                ${gstTotalRow}
-                <tr class="section-total-row final-net-payment">
-                    <td>${sectionTitle} Net Payment (Fee - TDS):</td>
-                    <td class="right-align">${sectionNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+                <tr class="advocate-grand-total">
+                    <td colspan="3">TOTAL ADVOCATE FEE (NET OF TDS)</td>
+                    <td class="currency-value">${formatCurrency(totalAdvocateFeePaid)}</td>
+                    <td></td>
+                    <td></td>
                 </tr>
             </tfoot>
         </table>
     `;
-}
-
-// --- ACCORDION EVENT LISTENER LOGIC (FIXED) ---
-function addAccordionListeners() {
-    // Remove old listeners (if any)
-    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
-        header.removeEventListener('click', toggleAccordion);
-    });
-
-    // Add new listeners
-    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
-        header.addEventListener('click', toggleAccordion);
-    });
-}
-
-function toggleAccordion() {
-    // 'this' is the header element (.accordion-header)
-    const header = this;
-    const content = header.nextElementSibling; // The content wrapper is the next sibling
     
-    if (content && content.classList.contains('accordion-content')) {
-        const isExpanded = header.classList.contains('expanded');
-        const icon = header.querySelector('.accordion-icon');
-        
-        if (isExpanded) {
-            // Collapse
-            content.classList.remove('expanded');
-            header.classList.remove('expanded');
-            header.classList.add('collapsed');
-            icon.textContent = '▶';
-        } else {
-            // Expand
-            content.classList.add('expanded');
-            header.classList.add('expanded');
-            header.classList.remove('collapsed');
-            icon.textContent = '▼';
-        }
-    }
+    // Total amount display should be currency formatted with symbol
+    const formattedTotalFee = totalAdvocateFeePaid.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+
+    // Add a summary view on top
+    const summaryHeader = `
+        <div class="grand-total-summary">
+            <span>Total Net Fee for ${selectedAdvocate}:</span>
+            <span class="total-value">${formattedTotalFee}</span>
+        </div>
+    `;
+
+    ADVOCATE_PAYMENTS_VIEW.innerHTML = summaryHeader + tableHTML;
 }
-// --- END ACCORDION EVENT LISTENER LOGIC ---
 
 
-// --- TOGGLE EVENT LISTENER (Unchanged) ---
-document.addEventListener('DOMContentLoaded', () => {
-    if (ADVOCATE_FEE_TOGGLE) {
-        ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
-            const isChecked = ADVOCATE_FEE_TOGGLE.checked;
-            
-            if (window.CURRENT_LOAN_RECORD) {
-                renderFilteredBlocks(window.CURRENT_LOAN_RECORD, isChecked);
-                addAccordionListeners(); // Re-add listeners after re-render
-                LOADING_STATUS.textContent = isChecked ? 'Showing Advocate Fee related charges only.' : 'Showing all charges.';
-            } else {
-                ADVOCATE_FEE_TOGGLE.checked = false; 
-                LOADING_STATUS.textContent = 'Error: No loan data loaded to filter.';
-            }
-        });
-    }
-});
-// --- END TOGGLE EVENT LISTENER ---
-
-// 4. UI Toggling (Unchanged)
+// --- 5. AUTHENTICATION & WRITE LOGIC (Unchanged) ---
 function showInputForm() {
-    const enteredKey = AUTH_KEY_INPUT.value;
-    
-    if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'grid'; 
+    if (AUTH_KEY_INPUT.value === CLIENT_SIDE_AUTH_KEY) {
+        FORM.style.display = 'grid';
         AUTH_KEY_INPUT.style.display = 'none';
-        document.getElementById('enable-input-button').style.display = 'none';
-        AUTH_LABEL.textContent = 'Write Access Granted.';
-        alert('Write access enabled! Please fill out the form.');
+        AUTH_BUTTON.style.display = 'none';
+        if (AUTH_LABEL) AUTH_LABEL.style.display = 'none';
+        MESSAGE_ELEMENT.textContent = 'Input enabled. Select a loan to write data against, or enter a new column name.';
     } else {
-        alert('Authorization failed. Please enter the correct secret key.');
+        alert('Access Denied. Please enter the correct secret key.');
         AUTH_KEY_INPUT.value = '';
     }
 }
@@ -1321,11 +953,11 @@ FORM.addEventListener('submit', async function(event) {
             FORM.reset(); 
             initialLoad(); 
         } else {
-            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
+            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`;
         }
 
     } catch (error) {
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API.';
-        console.error("Submission error:", error);
+        console.error('Submission error:', error);
+        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not submit data.';
     }
 });
