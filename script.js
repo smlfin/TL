@@ -97,19 +97,22 @@ const parseNumber = (value) => {
  * @param {string} currentAdvocate - The name of the advocate selected in the tracker dropdown.
  * @returns {string} The status value or 'N/A'.
  */
+// NEW HELPER: Get the correct payment status for the tracker view
 function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
     if (!record || !currentAdvocate) return 'N/A';
     
     const normalizedAdvocate = String(currentAdvocate).trim();
     
-    // Check if the advocate is the primary 'ADVOCATE'
+    // If the advocate is the primary 'ADVOCATE' (Section 138) -> Store in BO
     if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-        return record['138 Payment'] || 'Processing';
+        // *** CHANGE: Use 'BO' column for primary Advocate status ***
+        return record['BO'] || 'Processing';
     } 
     
-    // Check if the advocate is the secondary 'Sec/9 Advocate'
+    // If the advocate is the secondary 'Sec/9 Advocate' (Section 9) -> Store in BP
     if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-        return record['sec9 Payment'] || 'Processing';
+        // *** CHANGE: Use 'BP' column for Sec/9 Advocate status ***
+        return record['BP'] || 'Processing';
     }
     
     return 'N/A'; // Advocate not associated with this record
@@ -784,10 +787,11 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 // ====================================================================
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
 // ====================================================================
+// ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    
     const sel = tdElement.querySelector('.status-select');
     const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
+    
     // Get advocate name from the global filtering dropdown
     const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
 
@@ -796,18 +800,20 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         return;
     }
 
-    // --- CRITICAL LOGIC: Determine the target payment column ---
+    // --- CRITICAL LOGIC: Determine the target payment column (BO or BP) ---
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
-    
     let targetColumn = '';
+    
     if (record) {
         const normalizedAdvocate = currentAdvocate.trim();
-
+        
+        // 1. If the current advocate is the primary 'ADVOCATE', use 'BO'
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment'; // Primary Advocate Column Name
+            targetColumn = 'BO'; // *** UPDATED TO BO ***
         } 
+        // 2. If the current advocate is the secondary 'Sec/9 Advocate', use 'BP'
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment'; // Secondary Advocate Column Name
+            targetColumn = 'BP'; // *** UPDATED TO BP ***
         }
     }
     
@@ -817,22 +823,22 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         return;
     }
 
-    // 2. Build the payload using the ADVOCATE_ID key
+    // 2. Build the payload using the determined column name (targetColumn)
     const dataToSend = {
-        [targetColumn]: newStatus, 
+        [targetColumn]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, // <-- The key the backend (gs.txt) must use for lookup
+        "ADVOCATE_ID": currentAdvocate, 
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
-    
+
+    // ... rest of the fetch logic remains the same ...
     try {
         if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
-
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            mode: 'cors',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataToSend)
+        const response = await fetch(API_URL, { 
+            method: 'POST', 
+            mode: 'cors', 
+            headers: { 'Content-Type': 'application/json' }, 
+            body: JSON.stringify(dataToSend) 
         });
 
         const result = await response.json();
@@ -848,7 +854,6 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
             alert(`❌ Status update failed: ${result.message}`);
             revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
-
     } catch (error) {
         console.error('Error saving status:', error);
         alert('❌ Network or server error during update. Check console.');
