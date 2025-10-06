@@ -781,68 +781,55 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
     revertToTag(tdElement, originalStatus, loanNo, advocateName);
 }
 
-// ====================================================================
-// 4.4. Save new status and trigger full reload/re-render (With Error Reversion)
-// ====================================================================
-// ---------- safer confirmSaveStatus (accepts tdElement directly) ----------
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    // Defensive: ensure tdElement and selector exist
-    let originalStatus = 'Processing';
-    try {
-        const sel = tdElement.querySelector('.status-select');
-        if (sel && sel.dataset && sel.dataset.originalStatus)
-            originalStatus = sel.dataset.originalStatus;
-    } catch (e) { /* ignore */ }
     
-    // Get the advocate selected in the tracker dropdown
+    // 1. Get current advocate and original status
+    const sel = tdElement.querySelector('.status-select');
+    // Get the original status from the DOM for error reversion
+    const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
+
+    // Get the advocate name from the global filtering dropdown (ADVOCATE_TRACKER_SELECT)
     const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
 
-    // No-op if unchanged
+    // No-op if status is unchanged
     if (!newStatus || newStatus === originalStatus) {
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
     }
 
-    // --- NEW LOGIC START: Determine the target column based on advocate type ---
-    
-    // 1. Find the specific record being updated from the cached ALL_RECORDS data
+    // --- CRITICAL LOGIC: Determine the target payment column ---
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
     
     let targetColumn = '';
     if (record) {
         const normalizedAdvocate = currentAdvocate.trim();
 
-        // If the selected advocate is the main ADVOCATE, target '138 Payment'
+        // Check against primary ADVOCATE column
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment';
+            targetColumn = '138 Payment'; 
         } 
-        // If the selected advocate is the Sec/9 Advocate, target 'sec9 Payment'
+        // Check against secondary Sec/9 Advocate column
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment';
+            targetColumn = 'sec9 Payment'; 
         }
     }
     
+    // Fail if we couldn't map the advocate name to a payment column
     if (!targetColumn) {
-        // Fallback if the record or target column could not be determined
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
-        alert("Error: Could not determine Advocate type (138 or Sec 09) for this Loan No and Advocate combination. Update aborted.");
+        alert("Error: Cannot determine the correct payment column for this advocate. Update aborted.");
         return;
     }
 
-    // 2. Build the payload using the determined target column
+    // 2. Build the payload using the non-conflicting key: ADVOCATE_ID
     const dataToSend = {
-        // The column header is now dynamically set to '138 Payment' or 'sec9 Payment'
-        [targetColumn]: newStatus, 
+        [targetColumn]: newStatus, 
         "Loan No": loanNo,
-        // The ADVOCATE field is still required by the backend to find the unique row
-        "ADVOCATE_ID": currentAdvocate, 
+        "ADVOCATE_ID": currentAdvocate, // The key the backend (gs.txt) now expects
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
     
-    // --- NEW LOGIC END ---
-
     try {
-        // show saving indicator
         if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
 
         const response = await fetch(API_URL, {
@@ -852,47 +839,28 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
             body: JSON.stringify(dataToSend)
         });
 
-        if (!response.ok) {
-            const text = await response.text();
-            throw new Error(`HTTP ${response.status}: ${text}`);
-        }
-
         const result = await response.json();
 
         if (result && result.status === 'success') {
-            // Update the display immediately using the new status
-            revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
-            
-            // OPTIONAL: You might want to reload the full data set here to update other views
-            // initialLoad(); 
-            
-            // IMPORTANT: If you do not call initialLoad(), you must manually update ALL_RECORDS
-            // for the displayed row to ensure the status persists on re-render.
-            
-            // Find and update the record in ALL_RECORDS cache:
+            // Update the local cache (ALL_RECORDS) and revert display
             const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
             if (updatedRecord) {
-                 updatedRecord[targetColumn] = newStatus;
+                updatedRecord[targetColumn] = newStatus;
             }
-            
-            // Show success message
-            // MESSAGE_ELEMENT.textContent = `✅ Status for Loan No ${loanNo} saved to ${targetColumn}.`;
-
+            revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
         } else {
             alert(`❌ Status update failed: ${result.message}`);
-            // Revert on failure
+            // Revert display on failure
             revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
 
     } catch (error) {
         console.error('Error saving status:', error);
         alert('❌ Network or server error during update. Check console.');
-        // Revert on failure
+        // Revert display on failure
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
-
-
 // 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
