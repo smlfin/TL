@@ -463,31 +463,6 @@ async function initialLoad() {
 }
 
 
-// ====================================================================
-// 3. DOM ELEMENTS & INITIALIZATION
-// ====================================================================
-
-const FORM = document.getElementById('record-form');
-const MESSAGE_ELEMENT = document.getElementById('submission-message');
-const AUTH_KEY_INPUT = document.getElementById('auth-key');
-const AUTH_BUTTON = document.getElementById('enable-input-button'); 
-const AUTH_LABEL = document.querySelector('label[for="auth-key"]');
-const BRANCH_SELECT = document.getElementById('branch-select');
-const LOAN_SELECT = document.getElementById('loan-select');
-const SEARCH_BUTTON = document.getElementById('search-button');
-const LOADING_STATUS = document.getElementById('loading-status');
-const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
-const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
-const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
-const HEADER_INPUT = document.getElementById('header_name'); 
-const DATA_INPUT = document.getElementById('data_value');
-const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
-const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
-
-// Elements for Advocate Tracker
-const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
-const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 
 
 // CRITICAL: Initialize the data fetch on page load
