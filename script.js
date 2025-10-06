@@ -835,7 +835,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         [targetColumn]: newStatus, 
         "Loan No": loanNo,
         // The ADVOCATE field is still required by the backend to find the unique row
-        "ADVOCATE": currentAdvocate, 
+        "ADVOCATE_ID": currentAdvocate, 
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
     
@@ -1436,7 +1436,7 @@ FORM.addEventListener('submit', async function(event) {
     const dataToSend = {};
 dataToSend[headerName] = dataValue; 
 dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
-dataToSend["ADVOCATE"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
+dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
 dataToSend["authKey"] = keyToSubmit; 
 
     try {
