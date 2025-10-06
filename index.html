@@ -42,21 +42,29 @@
                 
                 <div class="search-group">
                     <select id="loan-select" required disabled>
-                        <option value="">-- Select Loan No --</option>
+                        <option value="">-- Select Branch First --</option>
                     </select>
                 </div>
-
-                <div class="search-group">
-                    <button id="display-button" disabled>Display Loan Data</button>
-                </div>
-
-                <div class="search-group">
-                    <label for="filter-toggle">
-                        <input type="checkbox" id="filter-toggle" checked>
-                        Show/Hide Zero Values
-                    </label>
-                </div>
                 
+                <button id="search-button" disabled>Display Loan Data</button>
+                
+                <p id="loading-status"></p>
+            </div>
+        </section>
+        
+        <hr>
+
+        <section id="data-view-blocks" style="display: none;">
+            <h2 class="loan-details-header">Loan File Details: <span id="display-loan-no"></span></h2>
+            
+            <div id="loan-snapshot-box"></div>
+
+            <div id="advocate-fee-controls" style="display: none;">
+                <span class="toggle-label">Show Advocate Fee only:</span>
+                <label class="switch">
+                    <input type="checkbox" id="advocate-fee-toggle">
+                    <span class="slider round"></span>
+                </label>
             </div>
             
             <div id="data-blocks"></div>
@@ -93,15 +101,6 @@
         </section>
     </div>
 
-    <div id="data-modal" class="modal">
-        <div class="modal-content">
-            <span class="close-button" onclick="closeModal()">&times;</span>
-            <h3 id="modal-title"></h3>
-            <div id="modal-body-content">
-                </div>
-            <button onclick="closeModal()">Close</button>
-        </div>
-    </div>
     <script src="script.js"></script>
 </body>
 </html>
