@@ -78,21 +78,6 @@ function formatDate(dateValue) {
 
     return dateValue; // Fallback
 }
-function getAdvocatePaymentStatus(record) {
-    if (!record) {
-        return "Processing"; // Default if no record is selected
-    }
-
-    // CRITICAL: We need to know which advocate is currently being viewed.
-    // Assuming the name of the current advocate (the one whose status is shown) 
-    // is stored in a hidden field or derived from a selection:
-    const currentAdvocateName = record["ADVOCATE_ID"] || document.getElementById('ADVOCATE_ID_INPUT').value; 
-    
-    // Fallback if the advocate name cannot be determined
-    if (!currentAdvocateName) {
-        return "Processing"; 
-    }
-
 
 
 // Helper function to safely parse a value
@@ -152,26 +137,6 @@ function calculateChargesNet(record, fields) {
     });
 
     return total;
-}
-// ====================================================================
-// NEW HELPER: Retrieves the current saved payment status for the advocate.
-// This handles the mapping from the generic "Advocate" to the specific backend column.
-// ====================================================================
-    // 1. Check if the current advocate is the primary 'ADVOCATE'
-    if (record["ADVOCATE"] === currentAdvocateName) {
-        // Read the status from the '138 Payment' column. 
-        // Use "Processing" if the cell is empty (null/undefined/empty string).
-        return record["138 Payment"] || "Processing";
-    }
-
-    // 2. Check if the current advocate is the secondary 'Sec/9 Advocate'
-    if (record["Sec/9 Advocate"] === currentAdvocateName) {
-        // Read the status from the 'sec9 Payment' column.
-        return record["sec9 Payment"] || "Processing";
-    }
-
-    // 3. If the advocate name doesn't match either column, return default.
-    return "Processing";
 }
 
 /**
