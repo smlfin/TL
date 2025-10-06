@@ -1129,13 +1129,14 @@ FORM.addEventListener('submit', async function(event) {
     }
 
     if (!LOAN_SELECT.value) {
+        // CRITICAL CHECK: Ensure a loan is selected before trying to save
         MESSAGE_ELEMENT.textContent = '❌ Error: Please select a Loan No. first.';
         return;
     }
 
     const dataToSend = {};
     dataToSend[headerName] = dataValue; 
-    dataToSend["Loan No"] = LOAN_SELECT.value; 
+    dataToSend["Loan No"] = LOAN_SELECT.value; // CRITICAL FIX: Loan No must be included for row targeting
     dataToSend["authKey"] = keyToSubmit; 
 
     try {
@@ -1156,7 +1157,8 @@ FORM.addEventListener('submit', async function(event) {
             // Reload all data to ensure the main table and tracker are updated
             initialLoad(); 
         } else {
-            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`;
+            // Now displays the error message sent back from the Netlify Function
+            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message || 'Server returned non-success status.'}`;
         }
 
     } catch (error) {
@@ -1166,7 +1168,10 @@ FORM.addEventListener('submit', async function(event) {
 });
 
 
-// 7. TOGGLE WRITE FORM
+// ====================================================================
+// 7. TOGGLE WRITE FORM (Helper for input button)
+// ====================================================================
+
 function showInputForm() {
     if (AUTH_KEY_INPUT.value === CLIENT_SIDE_AUTH_KEY) {
         FORM.style.display = 'grid'; // Changed to grid to match CSS
