@@ -334,108 +334,133 @@ const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view')
 
 document.addEventListener('DOMContentLoaded', initialLoad);
 
-
 // ====================================================================
-// 3. DATA FETCHING AND DROPDOWN POPULATION
+// 3. WRITE OPERATION: Handles POST requests (Data Submission) - FINAL FIX FOR TWO ADVOCATE COLUMNS
 // ====================================================================
+function doPost(e) {
+  try {
+    const raw = e.postData && e.postData.contents ? e.postData.contents : '{}';
+    const requestData = JSON.parse(raw);
 
-/**
- * Loads all data from the API. Includes cache-busting to ensure fresh data on every load.
- */
-async function initialLoad() {
-    LOADING_STATUS.textContent = 'Fetching all data to populate dropdowns... (This may take a moment)';
-    try {
-        // --- FIX: Add cache-busting to the GET request URL ---
-        const cacheBustingURL = `${API_URL}?t=${new Date().getTime()}`;
-        const response = await fetch(cacheBustingURL, {
-            method: 'GET',
-            mode: 'cors',
-            cache: 'no-cache' // Explicitly tell the browser not to use its cache
-        });
+    // AUTH CHECK
+    if (requestData.authKey !== SECRET_WRITE_KEY) {
+      const errorData = { status: 'error', message: 'Authorization failed. Invalid secret key.' };
+      return sendJson_(errorData, null);
+    }
+    
+    // CRITICAL: We require Loan No AND ADVOCATE field (the name of the person being paid)
+    const loanNo = requestData["Loan No"];
+    const advocateName = requestData["ADVOCATE"]; 
+    
+    if (!loanNo || !advocateName) {
+        const missingField = !loanNo ? '"Loan No"' : '"ADVOCATE"';
+        const errorData = { status: 'error', message: `Required field ${missingField} is missing for update. Front-end must send Loan No AND the Target Advocate's Name under the key 'ADVOCATE'.` };
+        return sendJson_(errorData, null);
+    }
 
-        if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
-        }
+    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
+    let sheet = ss.getSheetByName(SHEET_NAME);
+    if (!sheet) {
+      const errorData = { status: 'error', message: `Sheet named ${SHEET_NAME} not found.` };
+      return sendJson_(errorData, null);
+    }
 
-        const result = await response.json();
+    // 1. Get all data and headers
+    const range = sheet.getDataRange();
+    const values = range.getValues();
+    
+    if (values.length === 0) {
+        const errorData = { status: 'error', message: 'Sheet is empty. Cannot update.' };
+        return sendJson_(errorData, null);
+    }
+    
+    const headers = values[0].map(h => (typeof h === 'string' ? h.trim() : h));
+    
+    // Find the column indices for unique identification
+    const loanNoColIndex = headers.findIndex(h => h.toUpperCase() === 'LOAN NO');
+    const advocateColIndex = headers.findIndex(h => h.toUpperCase() === 'ADVOCATE');
+    const sec9AdvocateColIndex = headers.findIndex(h => h.toUpperCase() === 'SEC/9 ADVOCATE'); // Secondary advocate column
 
-        if (result.status === 'success' && result.data && result.data.length > 0) {
-            ALL_RECORDS = result.data;
-            populateBranchDropdown(ALL_RECORDS);
-            populateAdvocateDropdown(ALL_RECORDS); 
+    if (loanNoColIndex === -1 || (advocateColIndex === -1 && sec9AdvocateColIndex === -1)) {
+        const missingHeader = loanNoColIndex === -1 ? '"Loan No"' : 'Advocate column';
+        const errorData = { status: 'error', message: `Required column ${missingHeader} not found in headers.` };
+        return sendJson_(errorData, null);
+    }
+    
+    const normalizedLoanNo = String(loanNo).trim();
+    const normalizedAdvocateName = String(advocateName).trim();
+    
+    // 2. Find the Unique Row Index using Loan No AND a match in EITHER advocate column
+    let targetRowIndex = -1;
+    for (let i = 1; i < values.length; i++) {
+        const rowLoanNo = values[i][loanNoColIndex];
+        
+        // Check if Loan No matches
+        if (rowLoanNo && String(rowLoanNo).trim() === normalizedLoanNo) {
             
-            LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. to view file details, or use the Advocate Tracker.';
+            let advocateMatch = false;
+            
+            // Check the primary ADVOCATE column
+            if (advocateColIndex !== -1) {
+                const rowAdvocateName = values[i][advocateColIndex];
+                if (rowAdvocateName && String(rowAdvocateName).trim() === normalizedAdvocateName) {
+                    advocateMatch = true;
+                }
+            }
+            
+            // Check the secondary Sec/9 Advocate column
+            if (!advocateMatch && sec9AdvocateColIndex !== -1) {
+                const rowSec9AdvocateName = values[i][sec9AdvocateColIndex];
+                if (rowSec9AdvocateName && String(rowSec9AdvocateName).trim() === normalizedAdvocateName) {
+                    advocateMatch = true;
+                }
+            }
+            
+            if (advocateMatch) {
+                // targetRowIndex is the row number in the sheet (1-based)
+                targetRowIndex = i + 1; 
+                break;
+            }
+        }
+    }
+    
+    if (targetRowIndex === -1) {
+        const errorData = { status: 'error', message: `Record for Loan No ${loanNo} and Advocate ${advocateName} not found in sheet. Check spelling and case.` };
+        return sendJson_(errorData, null);
+    }
+    
+    // 3. Update the specific fields
+    const updatedFields = [];
+    
+    for (const field of Object.keys(requestData)) {
+        // Skip keys used for identification
+        if (field === 'authKey' || field === 'Loan No' || field === 'ADVOCATE') continue;
+        
+        const colIndex = headers.findIndex(h => h === field);
+        
+        if (colIndex !== -1) {
+            // Column index in the sheet is 1-based, so colIndex + 1
+            const cellRange = sheet.getRange(targetRowIndex, colIndex + 1);
+            cellRange.setValue(requestData[field]);
+            updatedFields.push(field);
         } else {
-            LOADING_STATUS.textContent = '❌ Error: Could not load data. Server returned success but data was empty.';
-            BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
-            ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
+            Logger.log(`WARNING: Field "${field}" not found in sheet headers.`);
         }
-
-    } catch (error) {
-        console.error("Error fetching data:", error);
-        LOADING_STATUS.textContent = `❌ Network Error or Invalid API URL: ${error.message}`;
-        BRANCH_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
-        ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Data Load Failed --</option>';
-    }
-}
-
-function populateBranchDropdown(records) {
-    const branches = new Set();
-    records.forEach(record => {
-        const branchName = String(record["Loan Branch"] || '').trim();
-        if (branchName && branchName !== 'N/A' && branchName !== '') {
-            branches.add(branchName);
-        }
-    });
-
-    BRANCH_SELECT.innerHTML = '<option value="" selected disabled>-- Select Branch --</option>';
-    
-    [...branches].sort().forEach(branch => {
-        const option = document.createElement('option');
-        option.value = branch;
-        option.textContent = branch;
-        BRANCH_SELECT.appendChild(option);
-    });
-
-    BRANCH_SELECT.disabled = false;
-}
-
-function populateAdvocateDropdown(records) {
-    const advocates = new Set();
-    const currentlySelected = ADVOCATE_TRACKER_SELECT.value;
-
-    records.forEach(record => {
-        const adv138 = String(record["ADVOCATE"] || '').trim();
-        if (adv138 && adv138 !== 'N/A' && adv138 !== '') {
-            advocates.add(adv138);
-        }
-        const adv09 = String(record["Sec/9 Advocate"] || '').trim();
-        if (adv09 && adv09 !== 'N/A' && adv09 !== '') {
-            advocates.add(adv09);
-        }
-    });
-
-    ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="" disabled>-- Select Advocate --</option>';
-    
-    [...advocates].sort().forEach(advocate => {
-        const option = document.createElement('option');
-        option.value = advocate;
-        option.textContent = advocate;
-        if (advocate === currentlySelected) {
-            option.selected = true;
-        }
-        ADVOCATE_TRACKER_SELECT.appendChild(option);
-    });
-    
-    if (!currentlySelected || advocates.size === 0) {
-        ADVOCATE_TRACKER_SELECT.querySelector('option[disabled]').selected = true;
     }
 
-    ADVOCATE_TRACKER_SELECT.disabled = false;
-    
-    if (currentlySelected && advocates.has(currentlySelected)) {
-         displayAdvocateSummary(currentlySelected); 
+    if (updatedFields.length === 0) {
+        const errorData = { status: 'error', message: 'No recognized fields provided for update.' };
+        return sendJson_(errorData, null);
     }
+
+    const successData = { status: 'success', message: `Record ${loanNo} for Advocate ${advocateName} updated successfully for fields: ${updatedFields.join(', ')}.` };
+    return sendJson_(successData, null);
+
+  } catch (error) {
+    Logger.log("POST Error: " + error.toString());
+    const errorData = { status: 'error', message: error.toString() };
+    return sendJson_(errorData, null);
+  }
 }
 
 // ====================================================================
@@ -558,12 +583,13 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const headerName = STATUS_FIELD; 
 
     const dataToSend = {
-        [headerName]: newStatus,
-        "Loan No": loanNo, 
-        "authKey": CLIENT_SIDE_AUTH_KEY 
-    };
+    [headerName]: newStatus,
+    "Loan No": loanNo, 
+    "ADVOCATE": ADVOCATE_TRACKER_SELECT.value, // <--- CRITICAL FIX: Added the advocate's name
+    "authKey": CLIENT_SIDE_AUTH_KEY 
+};
 
-    try {
+try {
         const response = await fetch(API_URL, {
             method: 'POST',
             mode: 'cors', 
