@@ -349,7 +349,8 @@ async function initialLoad() {
             // Check if an advocate was previously selected before reload
             const lastSelectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
             if (lastSelectedAdvocate) {
-                 displayAdvocateSummary(lastSelectedAdvocate); // Re-render if advocate was selected
+                 // Re-render only the summary view based on the current ALL_RECORDS cache
+                 displayAdvocateSummary(lastSelectedAdvocate); 
             } else {
                  LOADING_STATUS.textContent = 'Ready. Select Branch & Loan No. to view file details, or use the Advocate Tracker.';
             }
@@ -503,10 +504,16 @@ function enableStatusEdit(tdElement, loanNo, currentStatus) {
     tdElement.innerHTML = selectHTML;
 }
 
-// 4.3. Function to revert to the disabled state without saving
+
+// NEW HELPER: Function to revert the cell to a disabled tag style showing the specified status
+function revertToTag(tdElement, statusToDisplay, loanNo) {
+    tdElement.innerHTML = renderStatusTag(statusToDisplay, loanNo);
+}
+
+// 4.3. Function to revert to the disabled state without saving (Uses the new helper)
 function cancelStatusEdit(tdElement, originalStatus, loanNo) {
     // Revert the TD's content back to the original disabled tag
-    tdElement.innerHTML = renderStatusTag(originalStatus, loanNo);
+    revertToTag(tdElement, originalStatus, loanNo);
 }
 
 // 4.4. Save new status and trigger full reload/re-render
@@ -552,22 +559,27 @@ async function confirmSaveStatus(loanNo, originalStatus) {
         if (result.status === 'success') {
             alert(`✅ Status for Loan No ${loanNo} successfully updated to ${newStatus}.`);
             
-            // Reload all data and re-render the summary to update the display
-            await initialLoad(); 
-            displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value); 
+            // CRITICAL FIX: Immediately update the UI with the new status
+            revertToTag(tdElement, newStatus, loanNo);
+            
+            // Reload the entire data set asynchronously to update ALL_RECORDS for future display
+            // We do not await this, allowing the UI to stay responsive and updated.
+            initialLoad(); 
+            
         } else {
             alert(`❌ Submission Error for Loan ${loanNo}: ${result.message}`);
             // On failure, revert back to the original status tag
-            cancelStatusEdit(tdElement, originalStatus, loanNo);
+            revertToTag(tdElement, originalStatus, loanNo);
         }
 
     } catch (error) {
         console.error("Error saving status:", error);
         alert(`❌ Network Error while saving status for Loan ${loanNo}.`);
         // On failure, revert back to the original status tag
-        cancelStatusEdit(tdElement, originalStatus, loanNo);
+        revertToTag(tdElement, originalStatus, loanNo);
     }
 }
+
 
 // 4. ADVOCATE TRACKER DISPLAY LOGIC
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
@@ -610,6 +622,7 @@ function displayAdvocateSummary(selectedAdvocate) {
     filteredRecords.forEach(record => {
         const loanNo = record["Loan No"];
         const custName = record["Customer Name"] || 'N/A';
+        // IMPORTANT: Use the status from the ALL_RECORDS cache
         const statusValue = record[STATUS_FIELD] || 'Processing'; 
         
         // Calculate Fee Net for Sec 138 and Sec 09
