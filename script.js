@@ -88,6 +88,32 @@ const parseNumber = (value) => {
     const number = parseFloat(value);
     return isNaN(number) ? 0 : number;
 };
+// ====================================================================
+// NEW HELPER: Get the correct payment status for the tracker view
+// ====================================================================
+/**
+ * Determines the correct payment status column based on which advocate matches the tracker's selected advocate.
+ * @param {object} record - The loan record object.
+ * @param {string} currentAdvocate - The name of the advocate selected in the tracker dropdown.
+ * @returns {string} The status value or 'N/A'.
+ */
+function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
+    if (!record || !currentAdvocate) return 'N/A';
+    
+    const normalizedAdvocate = String(currentAdvocate).trim();
+    
+    // Check if the advocate is the primary 'ADVOCATE'
+    if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
+        return record['138 Payment'] || 'Processing';
+    } 
+    
+    // Check if the advocate is the secondary 'Sec/9 Advocate'
+    if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
+        return record['sec9 Payment'] || 'Processing';
+    }
+    
+    return 'N/A'; // Advocate not associated with this record
+}
 
 // Helper function to format currency for display
 function formatCurrency(value) {
@@ -764,9 +790,11 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     let originalStatus = 'Processing';
     try {
         const sel = tdElement.querySelector('.status-select');
-        if (sel && sel.dataset && sel.dataset.originalStatus) originalStatus = sel.dataset.originalStatus;
+        if (sel && sel.dataset && sel.dataset.originalStatus)
+            originalStatus = sel.dataset.originalStatus;
     } catch (e) { /* ignore */ }
-
+    
+    // Get the advocate selected in the tracker dropdown
     const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
 
     // No-op if unchanged
@@ -775,14 +803,43 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         return;
     }
 
-    // build payload: header name must match the sheet header exactly
-    const headerName = (typeof STATUS_FIELD !== 'undefined') ? STATUS_FIELD : "Advocate Payment Status";
+    // --- NEW LOGIC START: Determine the target column based on advocate type ---
+    
+    // 1. Find the specific record being updated from the cached ALL_RECORDS data
+    const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
+    
+    let targetColumn = '';
+    if (record) {
+        const normalizedAdvocate = currentAdvocate.trim();
+
+        // If the selected advocate is the main ADVOCATE, target '138 Payment'
+        if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
+            targetColumn = '138 Payment';
+        } 
+        // If the selected advocate is the Sec/9 Advocate, target 'sec9 Payment'
+        else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
+            targetColumn = 'sec9 Payment';
+        }
+    }
+    
+    if (!targetColumn) {
+        // Fallback if the record or target column could not be determined
+        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+        alert("Error: Could not determine Advocate type (138 or Sec 09) for this Loan No and Advocate combination. Update aborted.");
+        return;
+    }
+
+    // 2. Build the payload using the determined target column
     const dataToSend = {
-        [headerName]: newStatus,
+        // The column header is now dynamically set to '138 Payment' or 'sec9 Payment'
+        [targetColumn]: newStatus, 
         "Loan No": loanNo,
-        "ADVOCATE": currentAdvocate,
+        // The ADVOCATE field is still required by the backend to find the unique row
+        "ADVOCATE": currentAdvocate, 
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
+    
+    // --- NEW LOGIC END ---
 
     try {
         // show saving indicator
@@ -803,28 +860,34 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result && result.status === 'success') {
-            // On success, refresh the data and re-render the advocate summary
-            try {
-                if (typeof initialLoad === 'function') await initialLoad();
-            } catch (err) {
-                console.warn('initialLoad failed after save:', err);
+            // Update the display immediately using the new status
+            revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
+            
+            // OPTIONAL: You might want to reload the full data set here to update other views
+            // initialLoad(); 
+            
+            // IMPORTANT: If you do not call initialLoad(), you must manually update ALL_RECORDS
+            // for the displayed row to ensure the status persists on re-render.
+            
+            // Find and update the record in ALL_RECORDS cache:
+            const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
+            if (updatedRecord) {
+                 updatedRecord[targetColumn] = newStatus;
             }
-            try {
-                const adv = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : currentAdvocate;
-                if (typeof displayAdvocateSummary === 'function') displayAdvocateSummary(adv);
-            } catch (err) {
-                console.warn('displayAdvocateSummary failed after save:', err);
-            }
+            
+            // Show success message
+            // MESSAGE_ELEMENT.textContent = `✅ Status for Loan No ${loanNo} saved to ${targetColumn}.`;
+
         } else {
-            // Server returned a non-success JSON response
-            const msg = (result && result.message) ? result.message : 'Server returned non-success';
-            alert(`❌ Submission Error for Loan ${loanNo}: ${msg}. Status reverted.`);
+            alert(`❌ Status update failed: ${result.message}`);
+            // Revert on failure
             revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
         }
 
     } catch (error) {
-        console.error("Error saving status:", error);
-        alert(`❌ Network or Server Error while saving status for Loan ${loanNo}. Status reverted.`);
+        console.error('Error saving status:', error);
+        alert('❌ Network or server error during update. Check console.');
+        // Revert on failure
         revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
