@@ -442,7 +442,15 @@ function populateLoanDropdown() {
     LOAN_SELECT.disabled = false;
     LOADING_STATUS.textContent = `Loan Nos loaded. Select one.`;
 }
-
+// --- BLOCK B: ADVOCATE TRACKER EVENT LISTENER (NEW) ---
+ADVOCATE_TRACKER_SELECT.addEventListener('change', (e) => {
+    const advocateName = e.target.value;
+    if (advocateName) {
+        getAdvocatePaymentDetails(advocateName);
+    } else {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+    }
+});
 
 // 3. DISPLAY LOGIC (Search Button Click)
 SEARCH_BUTTON.addEventListener('click', displayLoan);
@@ -1269,6 +1277,243 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 // --- END TOGGLE EVENT LISTENER ---
 
+// --- BLOCK A: ADVOCATE TRACKER STATUS LOGIC (START) ---
+
+/**
+ * Filters ALL_RECORDS to find loans associated with the selected advocate 
+ * and formats the necessary payment data.
+ */
+function getAdvocatePaymentDetails(advocateName) {
+    ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p class="loading-message">Loading payments...</p>';
+
+    const paymentRecords = ALL_RECORDS.filter(record => 
+        String(record["ADVOCATE"]).trim() === advocateName || 
+        String(record["Sec/9 Advocate"]).trim() === advocateName
+    ).map(record => {
+        // Calculate the net fee (Fee - TDS) for both Section 138 and Section 09
+        let fee138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+        let fee09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+        let totalNetFee = fee138Net + fee09Net;
+
+        return {
+            loanNo: record["Loan No"],
+            advocateFee: totalNetFee,
+            fullRecord: record
+        };
+    }).filter(p => p.advocateFee > 0); // Only show loans with a positive net fee
+
+    if (paymentRecords.length > 0) {
+        displayAdvocatePayments(advocateName, paymentRecords);
+    } else {
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No active payment records found for <b>${advocateName}</b>.</p>`;
+    }
+}
+
+
+/**
+ * Renders the table view for the Advocate Payment Tracker.
+ */
+function displayAdvocatePayments(selectedAdvocate, loanPayments) {
+    // Note: The STATUS_FIELD and STATUS_OPTIONS constants were correctly identified in your existing code.
+    const STATUS_FIELD = "Advocate Payment Status"; 
+    const STATUS_OPTIONS = ["Paid", "Processing", "Rejected"];
+
+    let tableHtml = `
+        <table class="advocate-tracker-table">
+            <thead>
+                <tr>
+                    <th>Loan No</th>
+                    <th>Sanction Date</th>
+                    <th>Advocate Fee (Net)</th>
+                    <th>${STATUS_FIELD}</th>
+                    <th>Last Status Date</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    loanPayments.forEach(payment => {
+        const currentStatus = String(payment.fullRecord[STATUS_FIELD] || 'Unset').trim();
+        const lastStatusDate = formatDate(payment.fullRecord["Last Status Update Date"] || 'N/A');
+
+        const statusOptionsHtml = STATUS_OPTIONS.map(opt => 
+            // The selected option will be the current value from the sheet
+            `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${opt}</option>`
+        ).join('');
+        
+        // CRITICAL: The dropdown is DISABLED by default. 
+        const statusDropdownHtml = `
+            <select class="status-dropdown" 
+                    data-loan-no="${payment.loanNo}" 
+                    data-original-status="${currentStatus}"
+                    disabled
+            >
+                <option value="Unset" ${currentStatus === 'Unset' ? 'selected' : ''} disabled>-- ${currentStatus} --</option>
+                ${statusOptionsHtml}
+            </select>
+        `;
+
+        tableHtml += `
+            <tr data-advocate="${selectedAdvocate}" data-loan-no="${payment.loanNo}">
+                <td>${payment.loanNo}</td>
+                <td>${formatDate(payment.fullRecord["Loandate"])}</td>
+                <td>${payment.advocateFee.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
+                <td>${statusDropdownHtml}</td>
+                <td>${lastStatusDate}</td>
+            </tr>
+        `;
+    });
+    
+    tableHtml += `</tbody></table>`;
+    ADVOCATE_PAYMENTS_VIEW.innerHTML = tableHtml;
+
+    // Add listener to all disabled dropdowns to trigger auth (Core requirement: Click disabled -> Popup)
+    document.querySelectorAll('.status-dropdown').forEach(select => {
+        select.addEventListener('mousedown', function(e) {
+            // Prevent the dropdown from opening immediately if disabled
+            if (this.disabled) {
+                e.preventDefault(); 
+                showPasscodePopup(this); // <-- Triggers the modal/popup
+            }
+        });
+    });
+}
+
+
+/**
+ * Handles the POST request to save the new status to the backend/Google Sheet.
+ */
+async function updatePaymentStatus(loanNo, newStatus, selectElement) {
+    const originalStatus = selectElement.getAttribute('data-original-status');
+    const loadingText = `...Updating to ${newStatus}...`;
+    
+    // Temporarily change the disabled option's text
+    const disabledOption = selectElement.querySelector('option[disabled]');
+    if (disabledOption) disabledOption.textContent = loadingText;
+
+    const dataToSend = {};
+    dataToSend["Loan No"] = loanNo; 
+    dataToSend[STATUS_FIELD] = newStatus; 
+    dataToSend["authKey"] = CLIENT_SIDE_AUTH_KEY; 
+    
+    try {
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            mode: 'cors', 
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dataToSend)
+        });
+
+        const result = await response.json();
+        
+        if (result.status === 'success') {
+            alert(`✅ Status for Loan ${loanNo} successfully updated to ${newStatus}.`);
+            
+            // Reload the ALL_RECORDS data and re-render the advocate table
+            // This ensures the "Last Status Update Date" column is refreshed from the server
+            await initialLoad(); 
+            getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
+            
+        } else {
+            alert(`❌ Status Update Error for Loan ${loanNo}: ${result.message}. Please try again.`);
+            getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
+        }
+
+    } catch (error) {
+        alert(`❌ Network Error. Could not update status for Loan ${loanNo}.`);
+        console.error("Status update error:", error);
+        getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
+    }
+}
+
+
+
+function showPasscodePopup(selectElement) {
+    const loanNo = selectElement.getAttribute('data-loan-no');
+    
+    // Check if modal already exists to prevent duplicates
+    if (document.getElementById('passcode-modal')) return;
+
+    // HTML structure for the modal - REQUIRES CSS from Block C
+    const popupHTML = `
+        <div id="passcode-modal" class="modal-overlay">
+            <div class="modal-content small-modal">
+                <span class="close-button" onclick="document.getElementById('passcode-modal').remove()">&times;</span>
+                <h4>Authorize Status Change for Loan ${loanNo}</h4>
+                <p>Enter the passcode (<b>123</b>) to enable the status dropdown:</p>
+                <input type="password" id="status-passcode-input" placeholder="Passcode">
+                <button id="passcode-submit-button">Submit</button>
+                <p id="passcode-error-message" style="color: var(--color-danger); margin-top: 10px; display: none;"></p>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', popupHTML);
+    const modal = document.getElementById('passcode-modal');
+    const input = document.getElementById('status-passcode-input');
+    const submitButton = document.getElementById('passcode-submit-button');
+    const errorMessage = document.getElementById('passcode-error-message');
+    const originalStatus = selectElement.getAttribute('data-original-status');
+    const passcode = "123"; // The hardcoded passcode from your CLIENT_SIDE_AUTH_KEY
+
+    setTimeout(() => input.focus(), 100);
+
+    const closeModal = () => modal.remove();
+    
+    modal.addEventListener('click', (e) => {
+        if (e.target.classList.contains('modal-overlay')) {
+            closeModal();
+        }
+    });
+
+    const attemptAuth = () => {
+        const enteredKey = input.value;
+        errorMessage.style.display = 'none';
+        
+        if (enteredKey === passcode) {
+            
+            // 1. SUCCESS: Enable the dropdown and visually highlight
+            selectElement.disabled = false;
+            selectElement.classList.add('authorized-active');
+            selectElement.querySelector('option[disabled]').textContent = `-- Select New Status --`;
+            
+            // 2. Remove the modal
+            closeModal(); 
+            
+            // 3. Attach ONE-TIME change listener (Fires when user selects an option)
+            const oneTimeChangeHandler = function() {
+                const newStatus = this.value;
+                
+                // a) Immediately disable the dropdown again (Core Requirement)
+                this.disabled = true;
+                this.classList.remove('authorized-active');
+                
+                // b) Remove this listener 
+                this.removeEventListener('change', oneTimeChangeHandler);
+                
+                // c) Perform the write operation
+                updatePaymentStatus(loanNo, newStatus, this);
+            };
+
+            setTimeout(() => {
+                 selectElement.addEventListener('change', oneTimeChangeHandler);
+            }, 10);
+
+        } else {
+            errorMessage.textContent = '❌ Incorrect passcode.';
+            errorMessage.style.display = 'block';
+            input.value = '';
+            // Restore original text
+            selectElement.querySelector('option[disabled]').textContent = `-- ${originalStatus} --`;
+        }
+    };
+    
+    submitButton.addEventListener('click', attemptAuth);
+    input.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') attemptAuth();
+    });
+}
+// --- BLOCK A: ADVOCATE TRACKER STATUS LOGIC (END) ---
 // 4. UI Toggling (Unchanged)
 function showInputForm() {
     const enteredKey = AUTH_KEY_INPUT.value;
