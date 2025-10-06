@@ -530,7 +530,7 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 
 // 4.4. Save new status and trigger full reload/re-render (Fixed Logic)
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    const originalStatus = tdElement.querySelector('.status-select').dataset.originalStatus;
+    const originalStatus = tdElement.querySelector('.status-select').dataset.original-status;
 
     if (newStatus === originalStatus) {
         alert("Status is unchanged. Aborting save.");
@@ -696,7 +696,7 @@ function displayAdvocateSummary(selectedAdvocate) {
     LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
 }
 
-// 4.6. NEW FUNCTION: Show Fee Breakdown (UPDATED FOR CLARITY)
+// 4.6. NEW FUNCTION: Show Fee Breakdown (UPDATED FOR TDS SPLIT-UP)
 function showFeeBreakdown(buttonElement) {
     const loanNo = buttonElement.dataset.loanNo;
     const advocateName = buttonElement.dataset.advocate;
@@ -732,66 +732,83 @@ function showFeeBreakdown(buttonElement) {
     const renderFeeSection = (sectionTitle, definitions, isAdvocateForSection) => {
         if (!isAdvocateForSection) return '';
 
+        // 1. Separate fields into groups for clear display
+        const feeFields = definitions.AdvocateFeeFieldsDisplay.filter(f => !f.includes("GST") && !f.includes("TDS"));
+        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
+        const tdsFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("TDS"));
+
         let sectionHTML = `
             <div class="breakdown-section">
                 <h4>${sectionTitle}:</h4>
                 <div class="calc-note">
                     <span style="color: var(--color-primary); font-weight: 700;">PAYMENT CALCULATION:</span> 
-                    (Total Fee) - (Total TDS) = Total Fee Net
+                    (Total Fee) - (Total TDS) = Total Fee Net. **GST is listed separately and is NOT part of the Net Fee.**
                 </div>
                 <table class="fee-breakdown-table">
         `;
         let totalFee = 0;
         let totalTDS = 0;
         
-        // --- 1. FEES & GST ---
-        definitions.AdvocateFeeFieldsDisplay.forEach(field => {
+        // --- 1. FEES COMPONENTS ---
+        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">FEE COMPONENTS:</td></tr>`;
+        feeFields.forEach(field => {
             const value = parseNumber(record[field]);
-            let displayClass = '';
-            
-            if (field.includes("TDS")) {
-                totalTDS += value;
-                return; // Skip TDS for this loop, process separately
-            } else if (field.includes("GST")) {
-                displayClass = 'gst-row';
-            } else {
-                totalFee += value;
-            }
+            totalFee += value;
 
             sectionHTML += `
-                <tr class="${displayClass}">
-                    <td>${field.includes("GST") ? 'GST on ' + field.replace("GST of ", "").trim() : field.replace(/for Sec\..*|For Sec.*|Initial Fee|Final fee/g, "").trim() + ' Fee'}</td>
+                <tr>
+                    <td>${field.replace(/for Sec\..*|For Sec.*|Initial Fee|Final fee/g, "").trim() + ' Fee'}</td>
                     <td class="right-align">${formatCurrency(value)}</td>
                 </tr>
             `;
         });
         
-        // --- 2. TDS DEDUCTIONS ---
         sectionHTML += `
             <tr class="section-fees-total">
-                <td>**Total Fee (Excluding GST):**</td>
-                <td class="right-align">${formatCurrency(totalFee)}</td>
+                <td style="font-weight: 700;">TOTAL FEE (EXCLUDING GST & TDS):</td>
+                <td class="right-align" style="font-weight: 700;">${formatCurrency(totalFee)}</td>
             </tr>
+            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
         `;
 
-        // TDS Row (Deduction)
-        sectionHTML += `
-            <tr class="deduction">
-                <td>**(-) Less TDS:**</td>
-                <td class="right-align">${formatCurrency(totalTDS)}</td>
-            </tr>
-        `;
+        // --- 2. TDS DEDUCTIONS (Split-up) ---
+        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">TDS DEDUCTIONS:</td></tr>`;
+        tdsFields.forEach(field => {
+            const value = parseNumber(record[field]);
+            totalTDS += value;
+
+            sectionHTML += `
+                <tr class="deduction">
+                    <td>(-) Less ${field}</td>
+                    <td class="right-align">${formatCurrency(value)}</td>
+                </tr>
+            `;
+        });
         
         // --- 3. NET TOTAL ---
         const totalNet = totalFee - totalTDS;
 
         sectionHTML += `
             <tr class="section-net-total">
-                <td>**TOTAL FEE NET (Fees - TDS)**</td>
-                <td class="right-align">${formatCurrency(totalNet)}</td>
+                <td style="font-weight: 900;">TOTAL FEE NET (Fees - TDS)</td>
+                <td class="right-align" style="font-weight: 900;">${formatCurrency(totalNet)}</td>
             </tr>
-            </table></div>
+            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
         `;
+
+        // --- 4. GST (Listed separately for non-confusion) ---
+        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">GST COMPONENTS (NOT included in Net Fee):</td></tr>`;
+        gstFields.forEach(field => {
+            const value = parseNumber(record[field]);
+            sectionHTML += `
+                <tr class="gst-row">
+                    <td>${field}</td>
+                    <td class="right-align">${formatCurrency(value)}</td>
+                </tr>
+            `;
+        });
+        
+        sectionHTML += `</table></div>`;
         return sectionHTML;
     };
     
