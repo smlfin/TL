@@ -195,6 +195,31 @@ function calculateTotalCharges(record) {
 }
 
 
+// --- NEW: MODAL UTILITIES (Required for pop-up fixes) ---
+
+/** Shows the dynamic data modal with a title and content. */
+function showModal(title, content) {
+    MODAL_TITLE.textContent = title;
+    MODAL_BODY.innerHTML = content;
+    MODAL.style.display = 'block';
+}
+
+/** Hides the dynamic data modal. */
+function closeModal() {
+    MODAL.style.display = 'none';
+}
+
+// Close modal when clicking outside of it (window click)
+window.onclick = function(event) {
+    if (event.target === MODAL) {
+        closeModal();
+    }
+}
+// Make globally accessible for HTML onclick (e.g., the 'x' button)
+window.closeModal = closeModal; 
+// --------------------------------------------------------
+
+
 // API URL now points to the Netlify Function proxy
 const API_URL = "/.netlify/functions/fetch-data"; 
 const CLIENT_SIDE_AUTH_KEY = "123"; 
@@ -328,6 +353,12 @@ const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 
+// --- NEW: MODAL ELEMENTS FOR POP-UPS ---
+const MODAL = document.getElementById('data-modal');
+const MODAL_TITLE = document.getElementById('modal-title');
+const MODAL_BODY = document.getElementById('modal-body-content');
+// ----------------------------------------
+
 
 // 1. INITIAL FETCH AND DROPDOWN POPULATION (Modified to include advocate list population)
 document.addEventListener('DOMContentLoaded', initialLoad);
@@ -446,7 +477,7 @@ function populateLoanDropdown() {
 ADVOCATE_TRACKER_SELECT.addEventListener('change', (e) => {
     const advocateName = e.target.value;
     if (advocateName) {
-        getAdvocatePaymentDetails(advocateName);
+        displayAdvocatePayments(advocateName);
     } else {
         ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
     }
@@ -765,22 +796,102 @@ function renderFilteredBlocks(record, isAdvocateFeeOnly) {
 // --- END MODIFIED RENDER FILTERED BLOCKS FUNCTION ---
 
 
-// --- NEW ADVOCATE PAYMENT TRACKER LOGIC ---
+// --- NEW: MODAL HANDLERS FOR ADVOCATE TRACKER (Pop-up Fixes) ---
 
-ADVOCATE_TRACKER_SELECT.addEventListener('change', (e) => {
-    const selectedAdvocate = e.target.value;
-    if (selectedAdvocate) {
-        displayAdvocatePayments(selectedAdvocate);
+/** Displays details or timeline for the payment status in a modal. */
+function showAdvocateStatusDetails(loanNo, currentStatus, record) {
+    const statusClass = currentStatus.toLowerCase().replace(/\s/g, '-');
+    const details = `
+        <p><strong>Loan No:</strong> ${loanNo}</p>
+        <p><strong>Current Status:</strong> <span class="status-badge status-${statusClass}">${currentStatus}</span></p>
+        <hr>
+        <h4>Payment Reference Details:</h4>
+        <p><strong>Payment Date:</strong> ${formatDate(record["Payment Date"]) || 'N/A'}</p>
+        <p><strong>Transaction ID:</strong> ${record["Transaction ID"] || 'N/A'}</p>
+        <p><strong>Bank/Ref:</strong> ${record["Bank Reference"] || 'N/A'}</p>
+        <p style="margin-top: 15px;"><small>Status can only be modified via the tracker table dropdown after key authorization.</small></p>
+    `;
+    showModal(`Advocate Payment Status: ${loanNo}`, details);
+}
+window.showAdvocateStatusDetails = showAdvocateStatusDetails;
+
+
+/** Displays the detailed fee split-up for a selected loan record in a modal. */
+function showFeeSplitUp(record) {
+    const loanNo = record["Loan No"];
+    const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+    const adv138 = String(record["ADVOCATE"]).trim();
+    const adv09 = String(record["Sec/9 Advocate"]).trim();
+    
+    let definitions, section, advocateName;
+
+    // Determine the relevant section and charge definitions based on which advocate is present
+    if (adv138 && adv138 !== 'N/A' && adv138 === selectedAdvocate) {
+        definitions = CHARGE_DEFINITIONS_138;
+        section = "Section 138";
+        advocateName = adv138;
+    } else if (adv09 && adv09 !== 'N/A' && adv09 === selectedAdvocate) {
+        definitions = CHARGE_DEFINITIONS_09;
+        section = "Section 09";
+        advocateName = adv09;
     } else {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+        showModal('Fee Split-up', `<p>No fee details found for the selected Advocate on this Loan (${loanNo}).</p>`);
+        return;
     }
-});
+
+    // Combine Fee Display and Other Charges
+    const allFieldsToDisplay = [
+        ...definitions.AdvocateFeeFieldsDisplay,
+        ...definitions.OtherChargesFields.filter(f => !definitions.AdvocateFeeFieldsDisplay.includes(f))
+    ];
+    
+    let content = `
+        <p><strong>Advocate:</strong> ${advocateName}</p>
+        <p><strong>Loan No:</strong> ${loanNo} (${section})</p>
+        <table class="split-up-table">
+            <thead><tr><th>Charge Item</th><th class="right-align">Amount</th></tr></thead>
+            <tbody>
+    `;
+
+    allFieldsToDisplay.forEach(sheetHeader => {
+        let displayName = sheetHeader.replace(/( for Sec.*)/, '').replace(/TDS of /, 'TDS: ').replace(/GST of /, 'GST: ');
+        
+        const value = processValue(record, sheetHeader);
+        
+        // Only include non-zero/N/A values
+        if (value !== 'N/A' && !String(value).match(/^₹\s*0\.00$/)) {
+            let valueClass = sheetHeader.includes('TDS') ? 'danger' : '';
+            content += `<tr><td>${displayName}</td><td class="right-align ${valueClass}">${value}</td></tr>`;
+        }
+    });
+
+    // Calculate the final net total
+    const advFeeNetTotal = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
+    const formattedTotal = advFeeNetTotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
+    
+    content += `
+            </tbody>
+            <tfoot>
+                <tr>
+                    <td><strong>Advocate Fee (Net of TDS)</strong></td>
+                    <td class="right-align total-value-cell"><strong>${formattedTotal}</strong></td>
+                </tr>
+            </tfoot>
+        </table>
+        <p style="margin-top: 15px;"><small>Net Fee = Sum of Fees - Sum of TDS. GST is not included in the Net Fee total.</small></p>
+    `;
+
+    showModal(`Advocate Fee Split-up for ${loanNo}`, content);
+}
+window.showFeeSplitUp = showFeeSplitUp;
+
+// -------------------------------------------------------------------------
+
 
 // Helper function to get the payment breakdown for a single loan/advocate
 function getAdvocatePaymentDetails(record, advocateName) {
     const adv138Name = String(record["ADVOCATE"]).trim();
     const adv09Name = String(record["Sec/9 Advocate"]).trim();
-    
     let sec138Net = 0;
     let sec09Net = 0;
 
@@ -789,32 +900,29 @@ function getAdvocatePaymentDetails(record, advocateName) {
         // Use the new calculation: Fee - TDS, NO GST
         sec138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
     }
-    
     // Calculate Sec 09 fees if the selected advocate is the Sec 09 advocate
     if (adv09Name === advocateName) {
         // Use the new calculation: Fee - TDS, NO GST
         sec09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
     }
-    
+
     // Combine the amounts for the final net payment for this advocate on this loan
     const totalAdvocateNet = sec138Net + sec09Net;
-    
-    return {
-        sec138Net,
-        sec09Net,
-        totalAdvocateNet,
-        is138: adv138Name === advocateName,
+
+    return { 
+        sec138Net, 
+        sec09Net, 
+        totalAdvocateNet, 
+        is138: adv138Name === advocateName, 
         is09: adv09Name === advocateName,
         // Also return the full fields display list for the breakdown popup
-        sec138Fields: CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay,
+        sec138Fields: CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay, 
         sec09Fields: CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay,
     };
 }
 
-
 function displayAdvocatePayments(selectedAdvocate) {
     ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>Loading payments for <b>${selectedAdvocate}</b>...</p>`;
-    
     let grandTotal = 0;
     const loanPayments = [];
 
@@ -822,7 +930,7 @@ function displayAdvocatePayments(selectedAdvocate) {
     ALL_RECORDS.forEach(record => {
         const adv138Name = String(record["ADVOCATE"]).trim();
         const adv09Name = String(record["Sec/9 Advocate"]).trim();
-        
+
         // Only include loans where the selected advocate is involved
         if (adv138Name === selectedAdvocate || adv09Name === selectedAdvocate) {
             const details = getAdvocatePaymentDetails(record, selectedAdvocate);
@@ -833,13 +941,13 @@ function displayAdvocatePayments(selectedAdvocate) {
                     loanNo: record["Loan No"],
                     branch: record["Loan Branch"],
                     details: details,
-                    fullRecord: record 
+                    fullRecord: record
                 });
                 grandTotal += details.totalAdvocateNet;
             }
         }
     });
-    
+
     // 2. Render Results
     let html = `<h3>Payment Summary for: <span class="total-color-text">${selectedAdvocate}</span></h3>`;
 
@@ -848,7 +956,7 @@ function displayAdvocatePayments(selectedAdvocate) {
         ADVOCATE_PAYMENTS_VIEW.innerHTML = html;
         return;
     }
-    
+
     // Payments Table
     html += `
         <table id="advocate-payments-table">
@@ -857,14 +965,15 @@ function displayAdvocatePayments(selectedAdvocate) {
                     <th>Loan No</th>
                     <th>Branch</th>
                     <th>Section(s)</th>
-                    <th>Status</th> <th class="right-align">Advocate Net</th>
+                    <th>Status</th>
+                    <th class="right-align">Advocate Net</th>
                 </tr>
             </thead>
             <tbody>
     `;
 
     loanPayments.sort((a, b) => (a.loanNo > b.loanNo) ? 1 : -1); // Sort by Loan No.
-    
+
     loanPayments.forEach(payment => {
         const sections = [];
         if (payment.details.is138) sections.push("Sec 138");
@@ -872,71 +981,102 @@ function displayAdvocatePayments(selectedAdvocate) {
 
         const formattedNet = payment.details.totalAdvocateNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
         
-        // NEW STATUS DROPDOWN RENDERING
         const currentStatus = String(payment.fullRecord[STATUS_FIELD] || 'Unset').trim();
-        const statusOptionsHtml = STATUS_OPTIONS.map(opt => 
-            `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${opt}</option>`
-        ).join('');
+        const statusClass = currentStatus.toLowerCase().replace(/\s/g, '-');
         
-        const statusDropdownHtml = `
-            <select class="status-dropdown" 
-                    data-loan-no="${payment.loanNo}" 
-                    data-advocate="${selectedAdvocate}"
-                    data-original-status="${currentStatus}"
-                    disabled
+        // --- MODIFICATION 1: Clickable Status for Pop-up ---
+        const statusDisplayHtml = `
+            <span 
+                class="status-badge status-${statusClass}" 
+                style="cursor: pointer; text-decoration: underline;"
+                onclick="showAdvocateStatusDetails('${payment.loanNo}', '${currentStatus}', ${JSON.stringify(payment.fullRecord).replace(/"/g, '&quot;')})"
             >
+                ${currentStatus}
+            </span>
+        `;
+        
+        // The original code used a complex select/auth flow which is kept for write operations:
+        const statusOptionsHtml = STATUS_OPTIONS.map(opt => `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${opt}</option>`).join('');
+        const statusDropdownHtml = `
+            <select class="status-dropdown" data-loan-no="${payment.loanNo}" data-advocate="${selectedAdvocate}" data-original-status="${currentStatus}" disabled style="display: none;" >
                 <option value="Unset" ${currentStatus === 'Unset' ? 'selected' : ''} disabled>-- ${currentStatus} --</option>
                 ${statusOptionsHtml}
             </select>
         `;
+
+        // --- MODIFICATION 2: Clickable Fee Net for Pop-up ---
+        // Escape the JSON string for the onclick attribute to pass the whole record object
+        const recordJsonEscaped = JSON.stringify(payment.fullRecord).replace(/"/g, '&quot;');
+        const feeCellHtml = `
+            <span 
+                style="cursor: pointer; font-weight: bold; color: var(--color-primary); text-decoration: underline;"
+                onclick='showFeeSplitUp(${recordJsonEscaped})'
+            >
+                ${formattedNet}
+            </span>
+        `;
+
 
         html += `
             <tr>
                 <td>${payment.loanNo}</td>
                 <td>${payment.branch}</td>
                 <td>${sections.join(' & ')}</td>
-                <td>${statusDropdownHtml}</td> <td class="right-align">
-                    <button class="breakdown-button" 
-                            data-loan-no="${payment.loanNo}" 
-                            data-advocate="${selectedAdvocate}"
-                            data-net="${payment.details.totalAdvocateNet}"
-                            >
-                        ${formattedNet}
-                    </button>
+                <td>
+                    ${statusDisplayHtml}
+                    ${statusDropdownHtml}
                 </td>
+                <td class="right-align">${feeCellHtml}</td>
             </tr>
         `;
     });
-    
+
     // Grand Total Row
     const formattedGrandTotal = grandTotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     html += `
-            </tbody>
-            <tfoot>
-                <tr>
-                    <td colspan="4" class="right-align total-label">GRAND TOTAL:</td>
-                    <td class="right-align total-value">${formattedGrandTotal}</td>
-                </tr>
-            </tfoot>
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" class="right-align total-label">GRAND TOTAL:</td>
+                <td class="right-align total-value">${formattedGrandTotal}</td>
+            </tr>
+        </tfoot>
         </table>
+        <p style="margin-top: 15px;"><small><strong>Tip:</strong> Click on the **Advocate Fee (Net)** or **Status** text for details. Click the status text to enable the hidden dropdown for write access (passcode required).</small></p>
     `;
 
     // 3. Render and Attach Listeners
     ADVOCATE_PAYMENTS_VIEW.innerHTML = html;
-    
-    // NEW: Add listener to all disabled dropdowns to trigger auth
-    document.querySelectorAll('.status-dropdown').forEach(select => {
-        select.addEventListener('mousedown', function(e) {
-            // Prevent the dropdown from opening immediately if disabled
-            if (this.disabled) {
-                e.preventDefault(); 
-                showPasscodePopup(this);
+
+    // Attach listeners to the newly rendered clickable status spans for write authorization
+    document.querySelectorAll('.status-badge').forEach(span => {
+        span.addEventListener('click', function() {
+            // Find the hidden select associated with this span
+            const loanNo = this.parentElement.querySelector('.status-dropdown').getAttribute('data-loan-no');
+            const selectElement = this.parentElement.querySelector('.status-dropdown');
+            
+            // Only proceed if the dropdown is currently disabled (meaning it needs auth to write)
+            if (selectElement.disabled) {
+                // Keep the complex authentication flow for writing status
+                showPasscodePopup(selectElement); 
+            } else {
+                // If already enabled (authorized), clicking the status just shows the view, 
+                // but the select dropdown is what the user uses to change the status.
+                // We show the dropdown and hide the text when enabled. (Requires additional logic not in the original snippet, but we keep the current behavior)
             }
         });
     });
+    
+    // The original breakdown button logic is removed, as it's replaced by the onclick in feeCellHtml.
 
-    document.querySelectorAll('.breakdown-button').forEach(button => {
-        button.addEventListener('click', (e) => showPaymentBreakdownPopup(e.target, selectedAdvocate));
+    // Re-attach listener to all disabled dropdowns to trigger auth
+    document.querySelectorAll('.status-dropdown').forEach(select => {
+        select.addEventListener('mousedown', function(e) {
+            if (this.disabled) {
+                e.preventDefault();
+                showPasscodePopup(this);
+            }
+        });
     });
 }
 
@@ -944,19 +1084,19 @@ function displayAdvocatePayments(selectedAdvocate) {
 async function updatePaymentStatus(loanNo, newStatus, selectElement) {
     const dataToSend = {};
     // Key to identify the record is Loan No.
-    dataToSend["Loan No"] = loanNo; 
+    dataToSend["Loan No"] = loanNo;
     // The column to update
-    dataToSend[STATUS_FIELD] = newStatus; 
+    dataToSend[STATUS_FIELD] = newStatus;
     // The auth key is needed for the write function
-    dataToSend["authKey"] = CLIENT_SIDE_AUTH_KEY; 
-
+    dataToSend["authKey"] = CLIENT_SIDE_AUTH_KEY;
+    
     // Visually update the dropdown text while waiting
     selectElement.querySelector('option[disabled]').textContent = `...${newStatus}...`;
 
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'cors', 
+            mode: 'cors',
             headers: {
                 'Content-Type': 'application/json',
             },
@@ -964,17 +1104,16 @@ async function updatePaymentStatus(loanNo, newStatus, selectElement) {
         });
 
         const result = await response.json();
-        
+
         if (result.status === 'success') {
             // Success: Update the UI to reflect the new, confirmed status
             const currentAdvocate = ADVOCATE_TRACKER_SELECT.value;
             if (currentAdvocate) {
                 // A full reload of the data is the safest way to refresh the UI and ALL_RECORDS
                 await initialLoad();
-                 // Re-select the advocate to refresh the table with fresh data
+                // Re-select the advocate to refresh the table with fresh data
                 displayAdvocatePayments(currentAdvocate);
             }
-            
         } else {
             // Failure: Reset the dropdown to its last value and show an error
             alert(`❌ Status Update Error for Loan ${loanNo}: ${result.message}. Please try again.`);
@@ -983,7 +1122,6 @@ async function updatePaymentStatus(loanNo, newStatus, selectElement) {
             // Re-render the table to reset the UI safely
             displayAdvocatePayments(ADVOCATE_TRACKER_SELECT.value);
         }
-
     } catch (error) {
         alert(`❌ Network Error. Could not update status for Loan ${loanNo}.`);
         console.error("Status update error:", error);
@@ -996,10 +1134,13 @@ async function updatePaymentStatus(loanNo, newStatus, selectElement) {
 function showPasscodePopup(selectElement) {
     const loanNo = selectElement.getAttribute('data-loan-no');
     
+    // Check if the modal already exists to prevent duplicates
+    if (document.getElementById('passcode-modal')) return;
+
     const popupHTML = `
         <div id="passcode-modal" class="modal-overlay">
             <div class="modal-content small-modal">
-                <span class="close-button">&times;</span>
+                <span class="close-button" onclick="document.getElementById('passcode-modal').remove()">&times;</span>
                 <h4>Authorize Status Change for Loan ${loanNo}</h4>
                 <p>Enter the passcode to enable the status dropdown:</p>
                 <input type="password" id="status-passcode-input" placeholder="Passcode">
@@ -1007,17 +1148,14 @@ function showPasscodePopup(selectElement) {
             </div>
         </div>
     `;
-
     document.body.insertAdjacentHTML('beforeend', popupHTML);
     const modal = document.getElementById('passcode-modal');
     const input = document.getElementById('status-passcode-input');
     const submitButton = document.getElementById('passcode-submit-button');
-    const originalStatus = selectElement.getAttribute('data-original-status');
-
+    
     setTimeout(() => input.focus(), 100);
 
     const closeModal = () => modal.remove();
-    
     modal.querySelector('.close-button').addEventListener('click', closeModal);
     modal.addEventListener('click', (e) => {
         if (e.target.classList.contains('modal-overlay')) {
@@ -1028,510 +1166,77 @@ function showPasscodePopup(selectElement) {
     const attemptAuth = () => {
         const enteredKey = input.value;
         if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-            
             // 1. SUCCESS: Enable the dropdown and highlight
             selectElement.disabled = false;
             selectElement.classList.add('authorized-active');
             // Change disabled option text to reflect that a selection is now possible
             selectElement.querySelector('option[disabled]').textContent = `-- Select New Status --`;
             
-            // 2. Open the dropdown visually (trick to make it look like it was clicked)
-            const event = new MouseEvent('mousedown');
-            selectElement.dispatchEvent(event);
+            // 2. Hide the status text and show the dropdown
+            selectElement.style.display = 'block';
+            selectElement.previousElementSibling.style.display = 'none';
 
-            // 3. Remove the modal
-            closeModal(); 
-            
-            // 4. Attach ONE-TIME change listener
-            setTimeout(() => {
-                 selectElement.addEventListener('change', function oneTimeChangeHandler() {
-                    const newStatus = this.value;
-                    
-                    // a) Immediately disable the dropdown again and remove active class
-                    this.disabled = true;
-                    this.classList.remove('authorized-active');
-                    
-                    // b) Remove this listener
-                    this.removeEventListener('change', oneTimeChangeHandler);
-                    
-                    // c) Perform the write operation
-                    updatePaymentStatus(loanNo, newStatus, this);
-                });
-            }, 100);
-
-        } else {
-            alert('Incorrect passcode. Status change not authorized.');
-            input.value = '';
-            // Restore original text on disabled element
-            selectElement.querySelector('option[disabled]').textContent = `-- ${originalStatus} --`;
-        }
-    };
-    
-    submitButton.addEventListener('click', attemptAuth);
-    input.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') attemptAuth();
-    });
-}
-// --- END NEW ADVOCATE PAYMENT TRACKER LOGIC ---
-
-// NEW FUNCTION: Show Payment Breakdown Popup (Unchanged, kept for completeness)
-function showPaymentBreakdownPopup(buttonElement, advocateName) {
-    const loanNo = buttonElement.getAttribute('data-loan-no');
-    
-    // Find the record to get the full fee details for the breakdown
-    const record = ALL_RECORDS.find(r => 
-        String(r["Loan No"]).trim() === loanNo && 
-        (String(r["ADVOCATE"]).trim() === advocateName || String(r["Sec/9 Advocate"]).trim() === advocateName)
-    );
-    
-    if (!record) {
-        alert("Error: Could not find the corresponding loan record for breakdown.");
-        return;
-    }
-    
-    const details = getAdvocatePaymentDetails(record, advocateName);
-    const netTotal = details.totalAdvocateNet;
-    
-    let breakdownHTML = `
-        <div id="payment-breakdown-modal" class="modal-overlay">
-            <div class="modal-content">
-                <span class="close-button">&times;</span>
-                <h3>Payment Breakdown for ${advocateName}</h3>
-                <p><b>Loan No:</b> ${loanNo} | <b>Branch:</b> ${record["Loan Branch"]}</p>
-                <hr>
-                
-                ${details.is138 ? renderSectionBreakdown(record, details.sec138Fields, "Section 138 Fees", details.sec138Net) : ''}
-                
-                ${details.is09 ? renderSectionBreakdown(record, details.sec09Fields, "Section 09 Fees", details.sec09Net) : ''}
-
-                <div class="grand-total-summary">
-                    <span>FINAL NET PAYMENT</span>
-                    <span>${netTotal.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</span>
-                </div>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', breakdownHTML);
-    
-    const modal = document.getElementById('payment-breakdown-modal');
-    
-    // Close modal listeners
-    modal.querySelector('.close-button').addEventListener('click', () => modal.remove());
-    modal.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal-overlay')) {
-            modal.remove();
-        }
-    });
-}
-
-// Helper to render the detailed breakdown table for a section (Unchanged, kept for completeness)
-function renderSectionBreakdown(record, fields, sectionTitle, sectionNet) {
-    let tableRows = '';
-    let totalFeeBeforeTDS = 0;
-    let totalGST = 0;
-    let totalTDS = 0;
-    
-    fields.forEach(field => {
-        // Only include fields that have a value greater than 0
-        const rawValue = record[field];
-        const value = parseNumber(rawValue);
-        
-        if (value !== 0) {
-            const isTDS = field.includes("TDS");
-            const isGST = field.includes("GST");
-            const isFee = !isTDS && !isGST;
-            
-            const sign = isTDS ? -1 : 1;
-            const amount = value * sign;
-
-            // Track totals for the summary rows
-            if (isFee) {
-                totalFeeBeforeTDS += value;
-            } else if (isGST) {
-                totalGST += value;
-            } else if (isTDS) {
-                // We track TDS as a positive amount for the summary, then subtract it.
-                totalTDS += value; 
-            }
-
-            // Determine row class for clear visual differentiation
-            let rowClass = '';
-            let labelSuffix = '';
-            if (isGST) {
-                rowClass = 'gst-value'; 
-                labelSuffix = '<span class="gst-label">(Not included in Net Payment)</span>';
-            } else if (isTDS) {
-                rowClass = 'minus-value';
-            } else {
-                rowClass = 'fee-value'; 
-            }
-            
-            tableRows += `
-                <tr class="${rowClass}">
-                    <td>${field} ${labelSuffix}</td>
-                    <td class="right-align">${amount.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-            `;
-        }
-    });
-
-    if (tableRows === '') return ''; // Hide section if all fields are zero
-    
-    // The final net calculation is: (Total Fees) - (Total TDS)
-    // totalFeeBeforeTDS holds the sum of "Initial Fee" and "Final Fee"
-    const calculatedNet = totalFeeBeforeTDS - totalTDS;
-
-    const gstTotalRow = totalGST > 0 ? `
-        <tr class="section-total-row gst-summary">
-            <td>Total GST:</td>
-            <td class="right-align">${totalGST.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-        </tr>
-    ` : '';
-    
-    return `
-        <h4>${sectionTitle} Calculation</h4>
-        <p class="calc-note">Note: Net Payment calculation uses <b>Fee - TDS</b> and <b>excludes GST</b>.</p>
-        <table class="breakdown-table">
-            <thead>
-                <tr><th>Fee/Charge Description</th><th class="right-align">Amount</th></tr>
-            </thead>
-            <tbody>
-                ${tableRows}
-            </tbody>
-            <tfoot>
-                <tr class="section-total-row">
-                    <td>Total Fees (Gross):</td>
-                    <td class="right-align">${totalFeeBeforeTDS.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-                <tr class="section-total-row">
-                    <td>Total TDS Deduction:</td>
-                    <td class="right-align minus-value">${(totalTDS * -1).toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-                ${gstTotalRow}
-                <tr class="section-total-row final-net-payment">
-                    <td>${sectionTitle} Net Payment (Fee - TDS):</td>
-                    <td class="right-align">${sectionNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                </tr>
-            </tfoot>
-        </table>
-    `;
-}
-
-// --- ACCORDION EVENT LISTENER LOGIC (FIXED) ---
-function addAccordionListeners() {
-    // Remove old listeners (if any)
-    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
-        header.removeEventListener('click', toggleAccordion);
-    });
-
-    // Add new listeners
-    document.querySelectorAll('.data-block .accordion-header').forEach(header => {
-        header.addEventListener('click', toggleAccordion);
-    });
-}
-
-function toggleAccordion() {
-    // 'this' is the header element (.accordion-header)
-    const header = this;
-    const content = header.nextElementSibling; // The content wrapper is the next sibling
-    
-    if (content && content.classList.contains('accordion-content')) {
-        const isExpanded = header.classList.contains('expanded');
-        const icon = header.querySelector('.accordion-icon');
-        
-        if (isExpanded) {
-            // Collapse
-            content.classList.remove('expanded');
-            header.classList.remove('expanded');
-            header.classList.add('collapsed');
-            icon.textContent = '▶';
-        } else {
-            // Expand
-            content.classList.add('expanded');
-            header.classList.add('expanded');
-            header.classList.remove('collapsed');
-            icon.textContent = '▼';
-        }
-    }
-}
-// --- END ACCORDION EVENT LISTENER LOGIC ---
-
-
-// --- TOGGLE EVENT LISTENER (Unchanged) ---
-document.addEventListener('DOMContentLoaded', () => {
-    if (ADVOCATE_FEE_TOGGLE) {
-        ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
-            const isChecked = ADVOCATE_FEE_TOGGLE.checked;
-            
-            if (window.CURRENT_LOAN_RECORD) {
-                renderFilteredBlocks(window.CURRENT_LOAN_RECORD, isChecked);
-                addAccordionListeners(); // Re-add listeners after re-render
-                LOADING_STATUS.textContent = isChecked ? 'Showing Advocate Fee related charges only.' : 'Showing all charges.';
-            } else {
-                ADVOCATE_FEE_TOGGLE.checked = false; 
-                LOADING_STATUS.textContent = 'Error: No loan data loaded to filter.';
-            }
-        });
-    }
-});
-// --- END TOGGLE EVENT LISTENER ---
-
-// --- BLOCK A: ADVOCATE TRACKER STATUS LOGIC (START) ---
-
-/**
- * Filters ALL_RECORDS to find loans associated with the selected advocate 
- * and formats the necessary payment data.
- */
-function getAdvocatePaymentDetails(advocateName) {
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p class="loading-message">Loading payments...</p>';
-
-    const paymentRecords = ALL_RECORDS.filter(record => 
-        String(record["ADVOCATE"]).trim() === advocateName || 
-        String(record["Sec/9 Advocate"]).trim() === advocateName
-    ).map(record => {
-        // Calculate the net fee (Fee - TDS) for both Section 138 and Section 09
-        let fee138Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-        let fee09Net = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-        let totalNetFee = fee138Net + fee09Net;
-
-        return {
-            loanNo: record["Loan No"],
-            advocateFee: totalNetFee,
-            fullRecord: record
-        };
-    }).filter(p => p.advocateFee > 0); // Only show loans with a positive net fee
-
-    if (paymentRecords.length > 0) {
-        displayAdvocatePayments(advocateName, paymentRecords);
-    } else {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No active payment records found for <b>${advocateName}</b>.</p>`;
-    }
-}
-
-
-/**
- * Renders the table view for the Advocate Payment Tracker.
- */
-function displayAdvocatePayments(selectedAdvocate, loanPayments) {
-    // Note: The STATUS_FIELD and STATUS_OPTIONS constants were correctly identified in your existing code.
-    const STATUS_FIELD = "Advocate Payment Status"; 
-    const STATUS_OPTIONS = ["Paid", "Processing", "Rejected"];
-
-    let tableHtml = `
-        <table class="advocate-tracker-table">
-            <thead>
-                <tr>
-                    <th>Loan No</th>
-                    <th>Sanction Date</th>
-                    <th>Advocate Fee (Net)</th>
-                    <th>${STATUS_FIELD}</th>
-                    <th>Last Status Date</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    loanPayments.forEach(payment => {
-        const currentStatus = String(payment.fullRecord[STATUS_FIELD] || 'Unset').trim();
-        const lastStatusDate = formatDate(payment.fullRecord["Last Status Update Date"] || 'N/A');
-
-        const statusOptionsHtml = STATUS_OPTIONS.map(opt => 
-            // The selected option will be the current value from the sheet
-            `<option value="${opt}" ${opt === currentStatus ? 'selected' : ''}>${opt}</option>`
-        ).join('');
-        
-        // CRITICAL: The dropdown is DISABLED by default. 
-        const statusDropdownHtml = `
-            <select class="status-dropdown" 
-                    data-loan-no="${payment.loanNo}" 
-                    data-original-status="${currentStatus}"
-                    disabled
-            >
-                <option value="Unset" ${currentStatus === 'Unset' ? 'selected' : ''} disabled>-- ${currentStatus} --</option>
-                ${statusOptionsHtml}
-            </select>
-        `;
-
-        tableHtml += `
-            <tr data-advocate="${selectedAdvocate}" data-loan-no="${payment.loanNo}">
-                <td>${payment.loanNo}</td>
-                <td>${formatDate(payment.fullRecord["Loandate"])}</td>
-                <td>${payment.advocateFee.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 })}</td>
-                <td>${statusDropdownHtml}</td>
-                <td>${lastStatusDate}</td>
-            </tr>
-        `;
-    });
-    
-    tableHtml += `</tbody></table>`;
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = tableHtml;
-
-    // Add listener to all disabled dropdowns to trigger auth (Core requirement: Click disabled -> Popup)
-    document.querySelectorAll('.status-dropdown').forEach(select => {
-        select.addEventListener('mousedown', function(e) {
-            // Prevent the dropdown from opening immediately if disabled
-            if (this.disabled) {
-                e.preventDefault(); 
-                showPasscodePopup(this); // <-- Triggers the modal/popup
-            }
-        });
-    });
-}
-
-
-/**
- * Handles the POST request to save the new status to the backend/Google Sheet.
- */
-async function updatePaymentStatus(loanNo, newStatus, selectElement) {
-    const originalStatus = selectElement.getAttribute('data-original-status');
-    const loadingText = `...Updating to ${newStatus}...`;
-    
-    // Temporarily change the disabled option's text
-    const disabledOption = selectElement.querySelector('option[disabled]');
-    if (disabledOption) disabledOption.textContent = loadingText;
-
-    const dataToSend = {};
-    dataToSend["Loan No"] = loanNo; 
-    dataToSend[STATUS_FIELD] = newStatus; 
-    dataToSend["authKey"] = CLIENT_SIDE_AUTH_KEY; 
-    
-    try {
-        const response = await fetch(API_URL, {
-            method: 'POST',
-            mode: 'cors', 
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(dataToSend)
-        });
-
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            alert(`✅ Status for Loan ${loanNo} successfully updated to ${newStatus}.`);
-            
-            // Reload the ALL_RECORDS data and re-render the advocate table
-            // This ensures the "Last Status Update Date" column is refreshed from the server
-            await initialLoad(); 
-            getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
-            
-        } else {
-            alert(`❌ Status Update Error for Loan ${loanNo}: ${result.message}. Please try again.`);
-            getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
-        }
-
-    } catch (error) {
-        alert(`❌ Network Error. Could not update status for Loan ${loanNo}.`);
-        console.error("Status update error:", error);
-        getAdvocatePaymentDetails(ADVOCATE_TRACKER_SELECT.value);
-    }
-}
-
-
-
-function showPasscodePopup(selectElement) {
-    const loanNo = selectElement.getAttribute('data-loan-no');
-    
-    // Check if modal already exists to prevent duplicates
-    if (document.getElementById('passcode-modal')) return;
-
-    // HTML structure for the modal - REQUIRES CSS from Block C
-    const popupHTML = `
-        <div id="passcode-modal" class="modal-overlay">
-            <div class="modal-content small-modal">
-                <span class="close-button" onclick="document.getElementById('passcode-modal').remove()">&times;</span>
-                <h4>Authorize Status Change for Loan ${loanNo}</h4>
-                <p>Enter the passcode (<b>123</b>) to enable the status dropdown:</p>
-                <input type="password" id="status-passcode-input" placeholder="Passcode">
-                <button id="passcode-submit-button">Submit</button>
-                <p id="passcode-error-message" style="color: var(--color-danger); margin-top: 10px; display: none;"></p>
-            </div>
-        </div>
-    `;
-
-    document.body.insertAdjacentHTML('beforeend', popupHTML);
-    const modal = document.getElementById('passcode-modal');
-    const input = document.getElementById('status-passcode-input');
-    const submitButton = document.getElementById('passcode-submit-button');
-    const errorMessage = document.getElementById('passcode-error-message');
-    const originalStatus = selectElement.getAttribute('data-original-status');
-    const passcode = "123"; // The hardcoded passcode from your CLIENT_SIDE_AUTH_KEY
-
-    setTimeout(() => input.focus(), 100);
-
-    const closeModal = () => modal.remove();
-    
-    modal.addEventListener('click', (e) => {
-        if (e.target.classList.contains('modal-overlay')) {
-            closeModal();
-        }
-    });
-
-    const attemptAuth = () => {
-        const enteredKey = input.value;
-        errorMessage.style.display = 'none';
-        
-        if (enteredKey === passcode) {
-            
-            // 1. SUCCESS: Enable the dropdown and visually highlight
-            selectElement.disabled = false;
-            selectElement.classList.add('authorized-active');
-            selectElement.querySelector('option[disabled]').textContent = `-- Select New Status --`;
-            
-            // 2. Remove the modal
-            closeModal(); 
-            
-            // 3. Attach ONE-TIME change listener (Fires when user selects an option)
-            const oneTimeChangeHandler = function() {
+            // 3. Attach ONE-TIME change listener for update
+            selectElement.addEventListener('change', function handler() {
                 const newStatus = this.value;
-                
-                // a) Immediately disable the dropdown again (Core Requirement)
-                this.disabled = true;
-                this.classList.remove('authorized-active');
-                
-                // b) Remove this listener 
-                this.removeEventListener('change', oneTimeChangeHandler);
-                
-                // c) Perform the write operation
                 updatePaymentStatus(loanNo, newStatus, this);
-            };
+                this.removeEventListener('change', handler); // Remove after use
+            }, { once: true }); 
 
-            setTimeout(() => {
-                 selectElement.addEventListener('change', oneTimeChangeHandler);
-            }, 10);
-
+            // 4. Remove the modal
+            closeModal();
         } else {
-            errorMessage.textContent = '❌ Incorrect passcode.';
-            errorMessage.style.display = 'block';
+            alert('❌ Invalid Passcode.');
             input.value = '';
-            // Restore original text
-            selectElement.querySelector('option[disabled]').textContent = `-- ${originalStatus} --`;
+            input.focus();
         }
     };
-    
+
     submitButton.addEventListener('click', attemptAuth);
     input.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') attemptAuth();
     });
 }
-// --- BLOCK A: ADVOCATE TRACKER STATUS LOGIC (END) ---
-// 4. UI Toggling (Unchanged)
+
+
+// Function to add accordion listeners (assuming this exists elsewhere in the original code or is a placeholder)
+function addAccordionListeners() {
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', function() {
+            const content = this.nextElementSibling;
+            if (content.style.maxHeight) {
+                // Close accordion
+                content.style.maxHeight = null;
+                this.classList.remove('expanded');
+                this.classList.add('collapsed');
+                this.querySelector('.accordion-icon').textContent = '▶';
+            } else {
+                // Open accordion
+                content.style.maxHeight = content.scrollHeight + "px";
+                this.classList.remove('collapsed');
+                this.classList.add('expanded');
+                this.querySelector('.accordion-icon').textContent = '▼';
+            }
+        });
+    });
+}
+
+
+// --- ORIGINAL WRITE OPERATION (MODIFIED FOR LOAN NO) ---
 function showInputForm() {
-    const enteredKey = AUTH_KEY_INPUT.value;
-    
-    if (enteredKey === CLIENT_SIDE_AUTH_KEY) {
-        FORM.style.display = 'grid'; 
-        AUTH_KEY_INPUT.style.display = 'none';
-        document.getElementById('enable-input-button').style.display = 'none';
-        AUTH_LABEL.textContent = 'Write Access Granted.';
-        alert('Write access enabled! Please fill out the form.');
+    if (AUTH_KEY_INPUT.value === CLIENT_SIDE_AUTH_KEY) {
+        FORM.style.display = 'block';
+        MESSAGE_ELEMENT.textContent = '✅ Write access enabled. Select a loan and add a column header/value.';
+        AUTH_BUTTON.style.display = 'none';
+        AUTH_KEY_INPUT.disabled = true;
     } else {
-        alert('Authorization failed. Please enter the correct secret key.');
+        MESSAGE_ELEMENT.textContent = '❌ Invalid key. Please enter the correct secret key.';
         AUTH_KEY_INPUT.value = '';
     }
 }
 
 
-// 5. WRITE OPERATION (Unchanged)
+// 5. WRITE OPERATION 
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
@@ -1539,13 +1244,15 @@ FORM.addEventListener('submit', async function(event) {
     const keyToSubmit = AUTH_KEY_INPUT.value;
     const headerName = HEADER_INPUT.value.trim();
     const dataValue = DATA_INPUT.value;
-    
-    if (!keyToSubmit || !headerName || !dataValue) {
-        MESSAGE_ELEMENT.textContent = '❌ Error: All fields are required.';
+    const selectedLoan = LOAN_SELECT.value; // Get the selected loan number
+
+    if (!keyToSubmit || !headerName || !dataValue || !selectedLoan) {
+        MESSAGE_ELEMENT.textContent = '❌ Error: Select a Loan No. and ensure all fields are filled.';
         return;
     }
 
     const dataToSend = {};
+    dataToSend["Loan No"] = selectedLoan; // CRITICAL: Identify the row to update
     dataToSend[headerName] = dataValue; 
     dataToSend["authKey"] = keyToSubmit; 
 
@@ -1565,12 +1272,13 @@ FORM.addEventListener('submit', async function(event) {
             MESSAGE_ELEMENT.textContent = `✅ Record successfully saved! Column: ${headerName}. Reloading data...`;
             FORM.reset(); 
             initialLoad(); 
+            // After successful write and reload, display the updated file
+            displayLoan();
         } else {
-            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`; 
+            MESSAGE_ELEMENT.textContent = `❌ Submission Error: ${result.message}`;
         }
-
-    } catch (error) {
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not connect to API.';
-        console.error("Submission error:", error);
+    } catch (e) {
+        console.error('Submission error:', e);
+        MESSAGE_ELEMENT.textContent = `❌ Network Error during submission: ${e.message}`;
     }
 });
