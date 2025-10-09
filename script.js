@@ -95,12 +95,10 @@ const parseNumber = (value) => {
  * Determines the correct payment status column based on which advocate matches the tracker's selected advocate.
  * @param {object} record - The loan record object.
  * @param {string} currentAdvocate - The name of the advocate selected in the tracker dropdown.
- * @returns {string} The status value or 'N/A'.
+ * @returns {string} The status value or 'Processing'.
  */
-// NEW HELPER: Get the correct payment status for the tracker view
-// Function: getAdvocatePaymentStatusForTracker
 function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
-    if (!record || !currentAdvocate) return 'N/A';
+    if (!record || !currentAdvocate) return 'Processing';
     
     const normalizedAdvocate = String(currentAdvocate).trim();
     
@@ -114,8 +112,9 @@ function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
         return record['sec9 Payment'] || 'Processing';
     }
     
-    return 'N/A'; // Advocate not associated with this record
+    return 'Processing'; // Default to processing if advocate is selected but not associated with record
 }
+
 
 // Helper function to format currency for display
 function formatCurrency(value) {
@@ -162,8 +161,6 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 }
 
 // --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
-// (Your CHARGE_DEFINITIONS_138, CHARGE_DEFINITIONS_09, and CHARGE_FIELDS_FOR_SNAPSHOT definitions go here)
-
 const CHARGE_DEFINITIONS_138 = {
     // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
     "AdvocateFeeNetFields": [
@@ -437,144 +434,11 @@ async function initialLoad() {
 document.addEventListener('DOMContentLoaded', initialLoad);
 
 // All other functions and event listeners should follow here:
-// e.g., showInputForm(), handleLoanSelectChange(), displayLoanRecord(), 
 // ====================================================================
 
 // =ITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
-// ====================================================================
-// 3. WRITE OPERATION: Handles POST requests (Data Submission) - FINAL FIX FOR TWO ADVOCATE COLUMNS
-// NOTE: This doPost function is typically part of a Google Apps Script file 
-// (which acts as the backend/API) and is not executed in the browser (script.js).
-// It's included here for context of the payload structure.
-// ====================================================================
-/*
-function doPost(e) {
-  try {
-    const raw = e.postData && e.postData.contents ? e.postData.contents : '{}';
-    const requestData = JSON.parse(raw);
 
-    // AUTH CHECK
-    if (requestData.authKey !== GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
-      const errorData = { status: 'error', message: 'Authorization failed. Invalid secret key.' };
-      return sendJson_(errorData, null);
-    }
-    
-    // CRITICAL: We require Loan No AND ADVOCATE field (the name of the person being paid)
-    const loanNo = requestData["Loan No"];
-    const advocateName = requestData["ADVOCATE"]; 
-    
-    if (!loanNo || !advocateName) {
-        const missingField = !loanNo ? '"Loan No"' : '"ADVOCATE"';
-        const errorData = { status: 'error', message: `Required field ${missingField} is missing for update. Front-end must send Loan No AND the Target Advocate's Name under the key 'ADVOCATE'.` };
-        return sendJson_(errorData, null);
-    }
-
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      const errorData = { status: 'error', message: `Sheet named ${SHEET_NAME} not found.` };
-      return sendJson_(errorData, null);
-    }
-
-    // 1. Get all data and headers
-    const range = sheet.getDataRange();
-    const values = range.getValues();
-    
-    if (values.length === 0) {
-        const errorData = { status: 'error', message: 'Sheet is empty. Cannot update.' };
-        return sendJson_(errorData, null);
-    }
-    
-    const headers = values[0].map(h => (typeof h === 'string' ? h.trim() : h));
-    
-    // Find the column indices for unique identification
-    const loanNoColIndex = headers.findIndex(h => h.toUpperCase() === 'LOAN NO');
-    const advocateColIndex = headers.findIndex(h => h.toUpperCase() === 'ADVOCATE');
-    const sec9AdvocateColIndex = headers.findIndex(h => h.toUpperCase() === 'SEC/9 ADVOCATE'); // Secondary advocate column
-
-    if (loanNoColIndex === -1 || (advocateColIndex === -1 && sec9AdvocateColIndex === -1)) {
-        const missingHeader = loanNoColIndex === -1 ? '"Loan No"' : 'Advocate column';
-        const errorData = { status: 'error', message: `Required column ${missingHeader} not found in headers.` };
-        return sendJson_(errorData, null);
-    }
-    
-    const normalizedLoanNo = String(loanNo).trim();
-    const normalizedAdvocateName = String(advocateName).trim();
-    
-    // 2. Find the Unique Row Index using Loan No AND a match in EITHER advocate column
-    let targetRowIndex = -1;
-    for (let i = 1; i < values.length; i++) {
-        const rowLoanNo = values[i][loanNoColIndex];
-        
-        // Check if Loan No matches
-        if (rowLoanNo && String(rowLoanNo).trim() === normalizedLoanNo) {
-            
-            let advocateMatch = false;
-            
-            // Check the primary ADVOCATE column
-            if (advocateColIndex !== -1) {
-                const rowAdvocateName = values[i][advocateColIndex];
-                if (rowAdvocateName && String(rowAdvocateName).trim() === normalizedAdvocateName) {
-                    advocateMatch = true;
-                }
-            }
-            
-            // Check the secondary Sec/9 Advocate column
-            if (!advocateMatch && sec9AdvocateColIndex !== -1) {
-                const rowSec9AdvocateName = values[i][sec9AdvocateColIndex];
-                if (rowSec9AdvocateName && String(rowSec9AdvocateName).trim() === normalizedAdvocateName) {
-                    advocateMatch = true;
-                }
-            }
-            
-            if (advocateMatch) {
-                // targetRowIndex is the row number in the sheet (1-based)
-                targetRowIndex = i + 1; 
-                break;
-            }
-        }
-    }
-    
-    if (targetRowIndex === -1) {
-        const errorData = { status: 'error', message: `Record for Loan No ${loanNo} and Advocate ${advocateName} not found in sheet. Check spelling and case.` };
-        return sendJson_(errorData, null);
-    }
-    
-    // 3. Update the specific fields
-    const updatedFields = [];
-    
-    for (const field of Object.keys(requestData)) {
-        // Skip keys used for identification
-        if (field === 'authKey' || field === 'Loan No' || field === 'ADVOCATE') continue;
-        
-        const colIndex = headers.findIndex(h => h === field);
-        
-        if (colIndex !== -1) {
-            // Column index in the sheet is 1-based, so colIndex + 1
-            const cellRange = sheet.getRange(targetRowIndex, colIndex + 1);
-            cellRange.setValue(requestData[field]);
-            updatedFields.push(field);
-        } else {
-            Logger.log(`WARNING: Field "${field}" not found in sheet headers.`);
-        }
-    }
-
-    if (updatedFields.length === 0) {
-        const errorData = { status: 'error', message: 'No recognized fields provided for update.' };
-        return sendJson_(errorData, null);
-    }
-
-    const successData = { status: 'success', message: `Record ${loanNo} for Advocate ${advocateName} updated successfully for fields: ${updatedFields.join(', ')}.` };
-    return sendJson_(successData, null);
-
-  } catch (error) {
-    Logger.log("POST Error: " + error.toString());
-    const errorData = { status: 'error', message: error.toString() };
-    return sendJson_(errorData, null);
-  }
-}
-*/
 // ====================================================================
 // 4. ADVOCATE TRACKER LOGIC
 // ====================================================================
@@ -588,7 +452,24 @@ function getStatusClassName(status) {
     return 'status-unset';
 }
 
-// Function to convert the cell content back to the disabled tag (Final State)
+/**
+ * Helper to retrieve the total fee net from the record.
+ * Used when reconstructing the combined cell after an edit.
+ */
+function getRecordFeeNet(loanNo) {
+    const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
+    if (!record) return 0;
+    
+    // Calculate Net Fee for Sec 138 (Fees - TDS)
+    const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+    // Calculate Net Fee for Sec 09 (Fees - TDS)
+    const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    
+    return feeNet138 + feeNet09;
+}
+
+
+// Function to generate the HTML for the status tag (does NOT update the DOM)
 function revertToTag(tdElement, newStatus, loanNo, advocateName) {
     const statusClass = getStatusClassName(newStatus);
     
@@ -606,10 +487,39 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
         </div>
     `;
 
+    // Only return the HTML. The calling function handles DOM insertion and listener setup.
+    return htmlContent;
+}
+
+/**
+ * Function to reconstruct the entire combined status/fee <td> content.
+ * Used for initial rendering, and for reverting/confirming status changes.
+ */
+function revertToCombinedCell(tdElement, newStatus, loanNo, advocateName) {
+    const totalFeeNet = getRecordFeeNet(loanNo);
+    const statusTagHTML = revertToTag(null, newStatus, loanNo, advocateName);
+
+    const htmlContent = `
+        <div class="status-fee-wrapper">
+            <div class="status-display-area">
+                ${statusTagHTML}
+            </div>
+            
+            <div class="fee-net-area">
+                <button class="breakdown-button" 
+                        data-loan-no="${loanNo}" 
+                        data-advocate="${advocateName}"
+                        onclick="showFeeBreakdown(this)">
+                    ${formatCurrency(totalFeeNet)}
+                </button>
+            </div>
+        </div>
+    `;
+
     if (tdElement) {
         tdElement.innerHTML = htmlContent;
         
-        // Re-attach listener to the newly created Edit icon
+        // Re-attach listeners to the newly created Edit icon
         const editIcon = tdElement.querySelector('.edit-icon');
         if (editIcon) {
             editIcon.addEventListener('click', function() {
@@ -618,15 +528,17 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
         }
         return;
     }
-    
-    // Used during initial table render
+
+    // If tdElement is null, return the full HTML content for initial table generation
     return htmlContent;
 }
+
 
 // 4.1. Handle the initial click (The password step)
 function showPasscodePopup(iconElement) {
     const loanNo = iconElement.dataset.loanNo;
     const currentStatus = iconElement.dataset.currentStatus;
+    // The closest parent with status-cell class is the target TD
     const tdElement = iconElement.closest('.status-cell'); 
     const advocateName = iconElement.dataset.advocate;
 
@@ -695,15 +607,16 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
     saveBtn.className = 'status-save-btn';
     saveBtn.textContent = 'Save';
     saveBtn.addEventListener('click', async function (evt) {
-        // show saving
-        tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
+        // show saving (temporarily replaces content)
+        tdElement.innerHTML = `<div class="status-fee-wrapper"><span class="status-saving">Saving...</span></div>`;
         // get selected value
         const newStatus = select.value;
         try {
             await confirmSaveStatus(loanNo, newStatus, tdElement); // pass DOM tdElement
         } catch (err) {
             console.error('Unexpected error in save click:', err);
-            revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
+            // Revert on failure
+            revertToCombinedCell(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
         }
     });
 
@@ -713,7 +626,8 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
     cancelBtn.className = 'status-cancel-btn';
     cancelBtn.textContent = 'Cancel';
     cancelBtn.addEventListener('click', function () {
-        revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
+        // Revert to original status and full cell structure
+        revertToCombinedCell(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
     });
 
     btnWrap.appendChild(saveBtn);
@@ -728,15 +642,8 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
 }
 
 
-
-// 4.3. Function to revert to the disabled state without saving
-function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
-    revertToTag(tdElement, originalStatus, loanNo, advocateName);
-}
-
-
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
-// MODIFICATION: Removed local cache update to rely solely on the backend update.
+// MODIFICATION: Uses revertToCombinedCell to restore the full cell structure.
 
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const sel = tdElement.querySelector('.status-select');
@@ -746,7 +653,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
 
     if (!newStatus || newStatus === originalStatus) {
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+        revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
     }
 
@@ -768,7 +675,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     }
     
     if (!targetColumn) {
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+        revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         alert("Error: Cannot determine the correct payment column. Update aborted.");
         return;
     }
@@ -783,7 +690,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     };
 
     try {
-        if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
+        // Saving status is already set in enableStatusDropdown's save listener
         const response = await fetch(API_URL, { 
             method: 'POST', 
             mode: 'cors', 
@@ -794,21 +701,20 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result && result.status === 'success') {
-            // FIX APPLIED: Update the UI to the new status to confirm submission success, 
-            // but DO NOT update the local cache (ALL_RECORDS).
-            revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
+            // FIX APPLIED: Update the UI to the new status and restore the full cell structure.
+            revertToCombinedCell(tdElement, newStatus, loanNo, currentAdvocate);
         } else {
             alert(`❌ Status update failed: ${result.message}`);
-            revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+            revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         }
     } catch (error) {
         console.error('Error saving status:', error);
         alert('❌ Network or server error during update. Check console.');
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+        revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
     }
 }
 
-// 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
+// 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Combined Status/Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
 function displayAdvocateSummary(selectedAdvocate) {
@@ -836,8 +742,7 @@ function displayAdvocateSummary(selectedAdvocate) {
                     <th>Branch</th>
                     <th>Customer Name</th>
                     <th>Sections</th>
-                    <th>${STATUS_FIELD}</th>
-                    <th class="right-align">Total Fee Net (Click for Breakdown)</th>
+                    <th class="right-align">Payment Status / Total Fee Net (Click for Breakdown)</th>
                 </tr>
             </thead>
             <tbody>
@@ -869,29 +774,22 @@ function displayAdvocateSummary(selectedAdvocate) {
         tableHTML += `
             <tr id="row-${loanNo}">
                 <td data-label="Loan No">${loanNo}</td>
-                <td data-label="Branch">${branchName}</td> <td data-label="Customer Name">${custName}</td>
+                <td data-label="Branch">${branchName}</td> 
+                <td data-label="Customer Name">${custName}</td>
                 <td data-label="Sections">${sections.join(' & ')}</td>
-                <td data-label="Status" id="status-cell-${loanNo}" class="status-cell">
-                    ${revertToTag(null, statusValue, loanNo, selectedAdvocate)}
-                </td>
-                <td data-label="Total Net" class="right-align total-net-cell">
-                    <button class="breakdown-button" 
-                            data-loan-no="${loanNo}" 
-                            data-advocate="${selectedAdvocate}"
-                            onclick="showFeeBreakdown(this)">
-                        ${formatCurrency(totalFeeNet)}
-                    </button>
+                
+                <td data-label="Status & Total Net" id="status-cell-${loanNo}" class="status-cell combined-status-fee-cell">
+                    ${revertToCombinedCell(null, statusValue, loanNo, selectedAdvocate)}
                 </td>
             </tr>
             <tr id="breakdown-row-${loanNo}" class="fee-breakdown-row" style="display: none;">
-                <td colspan="6"></td>
-            </tr>
+                <td colspan="5"></td> </tr>
         `;
     });
 
     tableHTML += `
             <tr class="grand-total-row">
-                <td colspan="5" style="text-align: right; font-weight: 700;">GRAND TOTAL (NET):</td>
+                <td colspan="4" style="text-align: right; font-weight: 700;">GRAND TOTAL (NET):</td>
                 <td style="font-weight: 700; color: var(--color-primary);" class="right-align">${formatCurrency(grandTotalNet)}</td>
             </tr>
         </tbody>
