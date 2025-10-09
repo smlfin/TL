@@ -440,64 +440,15 @@ document.addEventListener('DOMContentLoaded', initialLoad);
 // e.g., showInputForm(), handleLoanSelectChange(), displayLoanRecord(), 
 // ====================================================================
 
-// ====================================================================
-// 2. CORE FUNCTIONS (Initial Fetch)
-// ====================================================================
-
-/**
- * CORE FUNCTION: Fetches all data and initializes the application.
- * Place the full content of your initialLoad function here.
- * NOTE: This function must be defined before the DOMContentLoaded listener.
- */
-async function initialLoad() {
-    LOADING_STATUS.textContent = 'Loading all data from server...';
-    LOADING_STATUS.style.display = 'block';
-    
-    try {
-        const response = await fetch(API_URL);
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            ALL_RECORDS = result.data;
-            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))];
-            
-            // Populate branch dropdown
-            populateBranchDropdown(branches);
-            
-            // Populate advocate dropdown for the tracker
-            const advocates = [...new Set(
-                ALL_RECORDS.flatMap(record => [record['ADVOCATE'], record['Sec/9 Advocate']])
-                           .filter(a => a)
-                           .map(a => String(a).trim())
-            )].sort();
-            populateAdvocateDropdown(advocates);
-
-            LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
-            LOADING_STATUS.style.color = 'var(--color-success)';
-        } else {
-            LOADING_STATUS.textContent = `❌ Error fetching data: ${result.message}`;
-            LOADING_STATUS.style.color = 'var(--color-danger)';
-        }
-    } catch (error) {
-        console.error("Fetch Error:", error);
-        LOADING_STATUS.textContent = `❌ Network Error: Could not connect to API.`;
-        LOADING_STATUS.style.color = 'var(--color-danger)';
-    } finally {
-        // Hide loading status after a brief delay
-        setTimeout(() => {
-            LOADING_STATUS.style.display = 'none';
-        }, 2000);
-    }
-}
-
-
-
-
-// CRITICAL: Initialize the data fetch on page load
+// =ITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
 // ====================================================================
 // 3. WRITE OPERATION: Handles POST requests (Data Submission) - FINAL FIX FOR TWO ADVOCATE COLUMNS
+// NOTE: This doPost function is typically part of a Google Apps Script file 
+// (which acts as the backend/API) and is not executed in the browser (script.js).
+// It's included here for context of the payload structure.
 // ====================================================================
+/*
 function doPost(e) {
   try {
     const raw = e.postData && e.postData.contents ? e.postData.contents : '{}';
@@ -623,7 +574,7 @@ function doPost(e) {
     return sendJson_(errorData, null);
   }
 }
-
+*/
 // ====================================================================
 // 4. ADVOCATE TRACKER LOGIC
 // ====================================================================
@@ -785,6 +736,7 @@ function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
 
 
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
+// MODIFICATION: Removed local cache update to rely solely on the backend update.
 
 async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     const sel = tdElement.querySelector('.status-select');
@@ -826,11 +778,10 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         // This will be {"138 Payment": "New Status"} or {"sec9 Payment": "New Status"}
         [targetColumn]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, // Used for row matching
+        "ADVOCATE": currentAdvocate, // Key is "ADVOCATE" for the backend's row matching
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
 
-    // ... rest of the fetch logic remains the same ...
     try {
         if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
         const response = await fetch(API_URL, { 
@@ -843,12 +794,8 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const result = await response.json();
 
         if (result && result.status === 'success') {
-            // Update local cache and display
-            const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
-            if (updatedRecord) {
-                // Update the correct column in the cache (e.g., updatedRecord['138 Payment'] = 'Paid')
-                updatedRecord[targetColumn] = newStatus;
-            }
+            // FIX APPLIED: Update the UI to the new status to confirm submission success, 
+            // but DO NOT update the local cache (ALL_RECORDS).
             revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
         } else {
             alert(`❌ Status update failed: ${result.message}`);
@@ -902,7 +849,9 @@ function displayAdvocateSummary(selectedAdvocate) {
         const loanNo = record["Loan No"];
         const branchName = record["Loan Branch"] || 'N/A'; // New Branch Field
         const custName = record["Customer Name"] || 'N/A';
-        const statusValue = record[STATUS_FIELD] || 'Processing'; 
+        
+        // Use the helper to get the status relevant to the current advocate/section
+        const statusValue = getAdvocatePaymentStatusForTracker(record, selectedAdvocate); 
         
         // Calculate Net Fee for Sec 138 (Fees - TDS)
         const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
@@ -1404,7 +1353,7 @@ FORM.addEventListener('submit', async function(event) {
     const dataToSend = {};
 dataToSend[headerName] = dataValue; 
 dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
-dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
+dataToSend["ADVOCATE"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
 dataToSend["authKey"] = keyToSubmit; 
 
     try {
