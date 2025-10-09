@@ -150,6 +150,7 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
     feeFields.forEach(field => {
         const value = parseNumber(record[field]);
 
+        // CRITICAL: Logic confirmed to calculate (Initial Fee + Final Fee) - (TDS Initial + TDS Final)
         if (field.includes("TDS")) {
             totalNet -= value; // Subtract TDS
         } else if (!field.includes("GST")) {
@@ -161,6 +162,24 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 }
 
 // --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
+// Map Sheet Headers to a cleaner, more professional display name
+const FEE_FIELD_MAP = {
+    // 138 Fees
+    "Initial Fee for Sec.138": "Initial Fee",
+    "GST of Sec.138 Initial Fee": "GST (Initial)",
+    "TDS of Sec.138 Initial Fee": "TDS (Initial)",
+    "Final fee for Sec 138": "Final Fee",
+    "GST of Final fee for Sec 138": "GST (Final)",
+    "TDS of Final fee for Sec 138": "TDS (Final)",
+    // 09 Fees
+    "Initial Fee for Sec 09": "Initial Fee",
+    "GST of Sec 09 Initial Fee": "GST (Initial)",
+    "TDS of Initial Fee": "TDS (Initial)", // Note: Sheet name for Sec 09 TDS Initial is slightly different
+    "Final Fee For Sec 09": "Final Fee",
+    "GST of Final Fee For Sec 09": "GST (Final)",
+    "TDS of Final Fee For Sec 09": "TDS (Final)", // Note: Sheet name for Sec 09 TDS Final is slightly different
+};
+
 const CHARGE_DEFINITIONS_138 = {
     // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
     "AdvocateFeeNetFields": [
@@ -465,6 +484,7 @@ function getRecordFeeNet(loanNo) {
     // Calculate Net Fee for Sec 09 (Fees - TDS)
     const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
     
+    // Return the total net fee for all sections.
     return feeNet138 + feeNet09;
 }
 
@@ -496,6 +516,7 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
  * Used for initial rendering, and for reverting/confirming status changes.
  */
 function revertToCombinedCell(tdElement, newStatus, loanNo, advocateName) {
+    // CRITICAL: Ensure this is the correct Net Fee calculation
     const totalFeeNet = getRecordFeeNet(loanNo);
     const statusTagHTML = revertToTag(null, newStatus, loanNo, advocateName);
 
@@ -685,7 +706,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         // This will be {"138 Payment": "New Status"} or {"sec9 Payment": "New Status"}
         [targetColumn]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, // Key is "ADVOCATE" for the backend's row matching
+        "ADVOCATE_ID": currentAdvocate, // FIX: Use ADVOCATE_ID for backend compatibility
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
 
@@ -844,82 +865,104 @@ function showFeeBreakdown(buttonElement) {
     const renderFeeSection = (sectionTitle, definitions, isAdvocateForSection) => {
         if (!isAdvocateForSection) return '';
 
-        // 1. Separate fields into groups for clear display
+        // 1. Prepare data and calculate totals
         const feeFields = definitions.AdvocateFeeFieldsDisplay.filter(f => !f.includes("GST") && !f.includes("TDS"));
-        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
         const tdsFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("TDS"));
+        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
+        
+        const otherCharges = definitions.OtherChargesFields;
 
-        let sectionHTML = `
-            <div class="breakdown-section">
-                <h4>${sectionTitle}:</h4>
-                <div class="calc-note">
-                    <span style="color: var(--color-primary); font-weight: 700;">PAYMENT CALCULATION:</span> 
-                    (Total Fee) - (Total TDS) = Total Fee Net. **GST is listed separately and is NOT part of the Net Fee.**
-                </div>
-                <table class="fee-breakdown-table">
-        `;
         let totalFee = 0;
         let totalTDS = 0;
+        let totalGST = 0;
+        let totalOtherCharges = 0;
         
-        // --- 1. FEES COMPONENTS ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">FEE COMPONENTS:</td></tr>`;
-        feeFields.forEach(field => {
+        // --- Build Section HTML ---
+        let sectionHTML = `
+            <div class="breakdown-section">
+                <h4>${sectionTitle}</h4>
+                <p class="calc-note">
+                    <strong>Total Payment Net = (Total Fee - Total TDS) + Total Other Charges.</strong> GST is listed for reference only.
+                </p>
+                <table class="fee-breakdown-table">
+        `;
+        
+        // --- 1. FEES and TDS (The main payment group) ---
+        sectionHTML += `<tr class="group-header"><td colspan="2">ADVOCATE FEES (Initial & Final)</td></tr>`;
+        
+        // Combine all fee and TDS items into one list for rendering
+        const feeTdsItems = [...feeFields, ...tdsFields].sort(); // Sort for consistent display order
+        
+        feeTdsItems.forEach(field => {
             const value = parseNumber(record[field]);
-            totalFee += value;
+            const displayName = FEE_FIELD_MAP[field] || field;
+            
+            if (field.includes("TDS")) {
+                totalTDS += value;
+                sectionHTML += `
+                    <tr class="deduction">
+                        <td>(-) ${displayName}</td>
+                        <td class="right-align">${formatCurrency(value)}</td>
+                    </tr>
+                `;
+            } else { // It's a fee field
+                totalFee += value;
+                sectionHTML += `
+                    <tr>
+                        <td>${displayName}</td>
+                        <td class="right-align">${formatCurrency(value)}</td>
+                    </tr>
+                `;
+            }
+        });
+        
+        // --- Total Fee Net Line ---
+        const totalNetFeeOnly = totalFee - totalTDS;
+        sectionHTML += `
+            <tr class="section-net-total-fee-only">
+                <td><strong>TOTAL FEE NET (Fees - TDS):</strong></td>
+                <td class="right-align"><strong>${formatCurrency(totalNetFeeOnly)}</strong></td>
+            </tr>
+            <tr><td colspan="2" class="separator"></td></tr>
+        `;
 
+        // --- 2. OTHER CHARGES ---
+        sectionHTML += `<tr class="group-header"><td colspan="2">OTHER CHARGES (Included in Net Total)</td></tr>`;
+        otherCharges.forEach(field => {
+            const value = parseNumber(record[field]);
+            totalOtherCharges += value;
             sectionHTML += `
                 <tr>
-                    <td>${field.replace(/for Sec\..*|For Sec.*|Initial Fee|Final fee/g, "").trim() + ' Fee'}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
-        
-        sectionHTML += `
-            <tr class="section-fees-total">
-                <td style="font-weight: 700;">TOTAL FEE (EXCLUDING GST & TDS):</td>
-                <td class="right-align" style="font-weight: 700;">${formatCurrency(totalFee)}</td>
-            </tr>
-            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
-        `;
-
-        // --- 2. TDS DEDUCTIONS (Split-up) ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">TDS DEDUCTIONS:</td></tr>`;
-        tdsFields.forEach(field => {
-            const value = parseNumber(record[field]);
-            totalTDS += value;
-
-            sectionHTML += `
-                <tr class="deduction">
-                    <td>(-) Less ${field}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
-        
-        // --- 3. NET TOTAL ---
-        const totalNet = totalFee - totalTDS;
-
-        sectionHTML += `
-            <tr class="section-net-total">
-                <td style="font-weight: 900;">TOTAL FEE NET (Fees - TDS)</td>
-                <td class="right-align" style="font-weight: 900;">${formatCurrency(totalNet)}</td>
-            </tr>
-            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
-        `;
-
-        // --- 4. GST (Listed separately for non-confusion) ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">GST COMPONENTS (NOT included in Net Fee):</td></tr>`;
-        gstFields.forEach(field => {
-            const value = parseNumber(record[field]);
-            sectionHTML += `
-                <tr class="gst-row">
                     <td>${field}</td>
                     <td class="right-align">${formatCurrency(value)}</td>
                 </tr>
             `;
         });
         
+        // --- GST (for reference only) ---
+        sectionHTML += `<tr><td colspan="2" class="separator"></td></tr>`;
+        sectionHTML += `<tr class="group-header gst-header"><td colspan="2">GST COMPONENTS (For Reference Only)</td></tr>`;
+        gstFields.forEach(field => {
+            const value = parseNumber(record[field]);
+            totalGST += value;
+            sectionHTML += `
+                <tr class="gst-row">
+                    <td>${FEE_FIELD_MAP[field] || field}</td>
+                    <td class="right-align">${formatCurrency(value)}</td>
+                </tr>
+            `;
+        });
+        
+        // --- Block Grand Total Net ---
+        const blockGrandTotalNet = totalNetFeeOnly + totalOtherCharges;
+
+        sectionHTML += `
+            <tr class="section-grand-total">
+                <td><strong>GRAND TOTAL NET PAYMENT FOR ${sectionTitle.toUpperCase()}:</strong></td>
+                <td class="right-align"><strong>${formatCurrency(blockGrandTotalNet)}</strong></td>
+            </tr>
+        `;
+
         sectionHTML += `</table></div>`;
         return sectionHTML;
     };
@@ -1211,8 +1254,10 @@ function toggleAccordion(event) {
     const icon = header.querySelector('.accordion-icon');
     if (header.classList.contains('expanded')) {
         icon.textContent = '▼';
+        contentWrapper.style.maxHeight = contentWrapper.scrollHeight + "px";
     } else {
         icon.textContent = '▶';
+        contentWrapper.style.maxHeight = null;
     }
 }
 
@@ -1249,10 +1294,10 @@ FORM.addEventListener('submit', async function(event) {
     }
 
     const dataToSend = {};
-dataToSend[headerName] = dataValue; 
-dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
-dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
-dataToSend["authKey"] = keyToSubmit; 
+    dataToSend[headerName] = dataValue; 
+    dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
+    dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // FIX: Use ADVOCATE_ID for backend compatibility
+    dataToSend["authKey"] = keyToSubmit; 
 
     try {
         const response = await fetch(API_URL, {
