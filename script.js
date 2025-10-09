@@ -669,7 +669,7 @@ function renderDataBlocks(record) {
 
 
 // ====================================================================
-// 4. ADVOCATE TRACKER LOGIC (FIX IMPLEMENTED HERE)
+// 4. ADVOCATE TRACKER LOGIC 
 // ====================================================================
 
 // Helper to determine CSS class for status tag
@@ -681,7 +681,7 @@ function getStatusClassName(status) {
     return 'status-unset';
 }
 
-// FIX 3: ADDED paymentField to arguments AND ensured it's in the icon's data attributes
+// ADDED paymentField to arguments AND ensured it's in the icon's data attributes
 function revertToTag(tdElement, newStatus, loanNo, advocateName, paymentField) { 
     const statusClass = getStatusClassName(newStatus);
     
@@ -774,6 +774,10 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
     const updateMessage = tdElement.querySelector('.update-message');
     updateMessage.textContent = 'Submitting...';
     
+    // Show immediate working state in the cell
+    tdElement.querySelector('.status-select').disabled = true;
+    tdElement.querySelector('.submit-status-button').disabled = true;
+    
     const requestBody = {
         authKey: CLIENT_SIDE_AUTH_KEY,
         "Loan No": loanNo,
@@ -794,9 +798,11 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
         const result = await response.json();
 
         if (result.status === 'success') {
-            updateMessage.textContent = '✅ Saved! Reloading...';
             
-            // Update the local ALL_RECORDS object
+            // 1. Provide IMEDIATE visual success feedback
+            updateMessage.textContent = '✅ Saved! Refreshing table...';
+            
+            // 2. Update the local ALL_RECORDS object (Crucial for the refresh)
             const recordToUpdate = ALL_RECORDS.find(r => 
                 String(r['Loan No']).trim() === String(loanNo).trim()
             );
@@ -806,17 +812,15 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
                 recordToUpdate[paymentField] = newStatus;
             }
 
-            // Re-render the Advocate Payments View to reflect the change
+            // 3. Re-render the Advocate Payments View to reflect the change IMMEDIATELY
             const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
             const filteredRecords = ALL_RECORDS.filter(record => 
                 String(record['ADVOCATE']).trim() === selectedAdvocate || 
                 String(record['Sec/9 Advocate']).trim() === selectedAdvocate
             );
             
-            // Wait for a second to show the success message, then re-render
-            setTimeout(() => {
-                displayAdvocatePaymentSummary(filteredRecords, selectedAdvocate);
-            }, 1000);
+            // REMOVED setTimeout: Call display immediately for instant update
+            displayAdvocatePaymentSummary(filteredRecords, selectedAdvocate); 
 
         } else {
             updateMessage.textContent = `❌ Error: ${result.message || 'Server error'}`;
