@@ -253,8 +253,6 @@ const CHARGE_FIELDS_FOR_SNAPSHOT = [
 
 // Helper function to calculate the total for the Snapshot Box
 function calculateTotalCharges(record) {
-    // Note: The original function calculates total for the loan view, not the tracker. 
-    // We will keep it for Block 5 & 6 totals in the main search view.
     return calculateChargesNet(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
 }
 
@@ -375,11 +373,10 @@ const DATA_INPUT = document.getElementById('data_value');
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 
-// Elements for Advocate Tracker (Updated/New Constants for the fix)
+// Elements for Advocate Tracker
 const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
 const ADVOCATE_TRACKER_INITIAL_MESSAGE = document.getElementById('advocate-tracker-initial-message');
-// These two elements must be added to index.html
 const ADVOCATE_PAYMENT_SNAPSHOT_BOX = document.getElementById('advocate-payment-snapshot-box'); 
 const ADVOCATE_PAYMENTS_TABLE_CONTAINER = document.getElementById('advocate-payments-table-container');
 
@@ -539,6 +536,30 @@ function displayLoanRecord() {
     }
 }
 
+// FIX 1: New function to load loan details from the tracker table click
+function viewLoanDetailsFromTracker(loanNo) {
+    const record = ALL_RECORDS.find(r => r['Loan No'] === loanNo);
+
+    if (record) {
+        // 1. Set the Branch dropdown
+        BRANCH_SELECT.value = record['Loan Branch'];
+        
+        // 2. Re-populate loan dropdown for the selected branch to ensure the option exists
+        handleBranchSelectChange(); // This function already exists and will populate LOAN_SELECT
+        
+        // 3. Set the Loan dropdown to the selected loan
+        LOAN_SELECT.value = loanNo;
+        
+        // 4. Manually trigger the display of the loan record
+        displayLoanRecord();
+        
+        // Optional: Scroll to the data view section
+        document.getElementById('data-view-blocks').scrollIntoView({ behavior: 'smooth' });
+    } else {
+        alert(`Loan ${loanNo} details could not be found.`);
+    }
+}
+
 // Function to render the entire data view
 function renderDataBlocks(record) {
     let blocksHtml = '';
@@ -660,13 +681,11 @@ function getStatusClassName(status) {
     return 'status-unset';
 }
 
-// Function to convert the cell content back to the disabled tag (Final State)
-function revertToTag(tdElement, newStatus, loanNo, advocateName) {
+// FIX 3: ADDED paymentField to arguments AND ensured it's in the icon's data attributes
+function revertToTag(tdElement, newStatus, loanNo, advocateName, paymentField) { 
     const statusClass = getStatusClassName(newStatus);
-    // CRITICAL: Ensure the paymentField data attribute is correctly captured from the tdElement if it exists
-    const paymentField = tdElement ? tdElement.dataset.paymentField : ''; 
     
-    // HTML content for the disabled tag with the Edit option
+    // CRITICAL: Ensure paymentField is present in the icon's data attributes
     const htmlContent = ` 
         <div class="status-tag ${statusClass}"> ${newStatus} 
             <span class="edit-icon" data-loan-no="${loanNo}" data-advocate="${advocateName}" data-current-status="${newStatus}" data-payment-field="${paymentField}" title="Click to edit status (password required)"> ✍️ Edit </span> 
@@ -701,6 +720,7 @@ function showPasscodePopup(iconElement) {
     
     if (password === CLIENT_SIDE_AUTH_KEY) {
         // 2. Password accepted, enable edit
+        // ADDED paymentField
         enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName, paymentField);
     } else if (password !== null && password !== '') {
         alert("Incorrect password. Status update aborted.");
@@ -743,7 +763,7 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName, pa
     const cancelButton = tdElement.querySelector('.cancel-status-button');
     cancelButton.addEventListener('click', function() {
         // Revert to the previous status tag (use the original status for the cancel)
-        revertToTag(tdElement, currentStatus, loanNo, advocateName);
+        revertToTag(tdElement, currentStatus, loanNo, advocateName, paymentField);
     });
 }
 // ----------------------------------------------------------------------------
@@ -801,14 +821,14 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
         } else {
             updateMessage.textContent = `❌ Error: ${result.message || 'Server error'}`;
             // Revert on error
-            revertToTag(tdElement, originalStatus, loanNo, advocateName);
+            revertToTag(tdElement, originalStatus, loanNo, advocateName, paymentField); // Pass paymentField on revert
         }
 
     } catch (error) {
         updateMessage.textContent = '❌ Network Error. Status update failed.';
         console.error("Error submitting status:", error);
         // Revert on network error
-        revertToTag(tdElement, originalStatus, loanNo, advocateName);
+        revertToTag(tdElement, originalStatus, loanNo, advocateName, paymentField); // Pass paymentField on revert
     }
 }
 // ----------------------------------------------------------------------------
@@ -855,7 +875,6 @@ function displayAdvocatePaymentSummary(records, advocateName) {
                 <tr>
                     <th>Loan No</th>
                     <th>Customer Name</th>
-                    <th>Loan Date</th>
                     <th>Total Fee Net</th>
                     <th>Current Payment Status (Fetched)</th> 
                     <th>${STATUS_FIELD} (Edit Only)</th> 
@@ -867,7 +886,7 @@ function displayAdvocatePaymentSummary(records, advocateName) {
     records.forEach(record => {
         const loanNo = record['Loan No'];
         const customerName = record['Customer Name'];
-        const loanDate = formatDate(record['Loandate']);
+        // const loanDate = formatDate(record['Loandate']); // LOAN DATE REMOVED
         
         let netFee = 0;
         let paymentField = ''; // The field to be updated in the backend (e.g., '138 Payment')
@@ -898,18 +917,17 @@ function displayAdvocatePaymentSummary(records, advocateName) {
         // The current status fetched from the backend for the *specific* payment field
         const currentStatus = getAdvocatePaymentStatusForTracker(record, advocateName); 
         
-        // COLUMN 5: The cell for the currently recorded status (Static display near Fee Net)
+        // COLUMN 4: The cell for the currently recorded status (Static display near Fee Net)
         const currentStatusTag = `<span class="status-tag ${getStatusClassName(currentStatus)}">${currentStatus}</span>`;
 
-        // COLUMN 6: The cell for the editable status (Dropdown/Edit Button)
-        // CRITICAL: We pass the paymentField to the editable cell's data attribute and the edit icon.
-        const editableCellHtml = revertToTag(null, currentStatus, loanNo, advocateName);
+        // COLUMN 5: The cell for the editable status (Dropdown/Edit Button)
+        // CRITICAL: Pass paymentField to revertToTag
+        const editableCellHtml = revertToTag(null, currentStatus, loanNo, advocateName, paymentField);
 
         tableHtml += `
             <tr data-loan-no="${loanNo}">
-                <td>${loanNo}</td>
+                <td class="loan-no-cell" onclick="viewLoanDetailsFromTracker('${loanNo}')" style="cursor: pointer; font-weight: bold; color: var(--color-primary);">${loanNo}</td>
                 <td>${customerName}</td>
-                <td>${loanDate}</td>
                 <td>${feeDisplay}</td>
                 <td>${currentStatusTag}</td>
                 <td class="status-cell" data-payment-field="${paymentField}">${editableCellHtml}</td>
