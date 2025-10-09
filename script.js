@@ -424,6 +424,9 @@ async function initialLoad() {
     LOADING_STATUS.textContent = 'Loading all data from server...';
     LOADING_STATUS.style.display = 'block';
     
+    // Preserve the currently selected advocate before clearing ALL_RECORDS
+    const currentlySelectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+
     try {
         // Assume API_URL is configured to handle the main data fetch
         const response = await fetch(API_URL);
@@ -448,8 +451,9 @@ async function initialLoad() {
             LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
             LOADING_STATUS.style.color = 'var(--color-success)';
             
-            // IMPORTANT: If an advocate was selected before the reload, re-display the tracker
-            if (ADVOCATE_TRACKER_SELECT.value) {
+            // Re-select the advocate and trigger the table update if one was previously selected
+            if (currentlySelectedAdvocate) {
+                ADVOCATE_TRACKER_SELECT.value = currentlySelectedAdvocate;
                 handleAdvocateSelectChange();
             }
 
@@ -739,7 +743,8 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName, pa
 
     // 1. Build the dropdown options
     let optionsHtml = STATUS_OPTIONS.map(status => {
-        const selected = status === currentStatus ? 'selected' : '';
+        // The default selected option is the current fetched status
+        const selected = status === currentStatus ? 'selected' : ''; 
         return `<option value="${status}" ${selected}>${status}</option>`;
     }).join('');
     
@@ -808,33 +813,24 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
 
         if (result.status === 'success') {
             
-            // 1. Update the local ALL_RECORDS object (Crucial for the next fetch)
-            const recordToUpdate = ALL_RECORDS.find(r => 
-                String(r['Loan No']).trim() === String(loanNo).trim()
-            );
-
-            if (recordToUpdate) {
-                // Update the correct payment field in the local cache
-                recordToUpdate[paymentField] = newStatus;
-            }
-
-            // --- FIX A: Immediate Visual Update (More Efficient) ---
+            // 1. Provide IMEDIATE visual success feedback (Client-Side Fix)
             revertToTag(tdElement, newStatus, loanNo, advocateName, paymentField);
-            // Show a quick success message at the top of the table
+            
             const tableContainer = document.getElementById('advocate-payments-view');
             let successMsg = document.createElement('p');
-            successMsg.textContent = `✅ Status for Loan ${loanNo} saved as ${newStatus}.`;
+            successMsg.textContent = `✅ Status for Loan ${loanNo} saved as ${newStatus}. Forcing data synchronization...`;
             successMsg.className = 'success-message';
             tableContainer.prepend(successMsg);
-            setTimeout(() => successMsg.remove(), 3000); 
-
-            // --- FIX B: Force Data Sync with Backend (Persistence) ---
-            // If the user's report is true, the data is not persisting on the backend
-            // Forcing a full reload (which re-fetches all data) is the only way to confirm persistence.
-            // Re-select the advocate after the full reload to show the updated table
+            
+            
+            // 2. CRITICAL: FORCE A FULL RELOAD AND REDISPLAY (Backend Persistence Fix)
+            // This ensures the client state is wiped and replaced by the newly persisted data.
             await initialLoad(); 
             ADVOCATE_TRACKER_SELECT.value = selectedAdvocate;
             handleAdvocateSelectChange(); 
+            
+            // Remove the temporary message after the sync is complete
+            setTimeout(() => successMsg.remove(), 3000);
 
         } else {
             updateMessage.textContent = `❌ Error: ${result.message || 'Server error'}`;
@@ -894,7 +890,7 @@ function displayAdvocatePaymentSummary(records, advocateName) {
                     <th>Loan No</th>
                     <th>Customer Name</th>
                     <th>Total Fee Net</th>
-                    <th>Current Payment Status (Fetched)</th> 
+                    <th>Current Status (Fetched)</th> 
                     <th>${STATUS_FIELD} (Edit Only)</th> 
                 </tr>
             </thead>
