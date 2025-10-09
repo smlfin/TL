@@ -685,7 +685,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         // This will be {"138 Payment": "New Status"} or {"sec9 Payment": "New Status"}
         [targetColumn]: newStatus,
         "Loan No": loanNo,
-        "ADVOCATE": currentAdvocate, // Key is "ADVOCATE" for the backend's row matching
+        "ADVOCATE_ID": currentAdvocate, // Key is "ADVOCATE" for the backend's row matching
         "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
     };
 
@@ -1251,7 +1251,7 @@ FORM.addEventListener('submit', async function(event) {
     const dataToSend = {};
 dataToSend[headerName] = dataValue; 
 dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
-dataToSend["ADVOCATE"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
+dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
 dataToSend["authKey"] = keyToSubmit; 
 
     try {
