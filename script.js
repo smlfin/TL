@@ -34,7 +34,6 @@ const CRITICAL_FIELDS = [
     "CASENOSec9" 
 ];
 
-
 // Helper function to format date strings from Google Sheets to dd/mm/yyyy
 function formatDate(dateValue) {
     if (!dateValue || dateValue === 'N/A' || String(dateValue).startsWith('18')) {
@@ -88,6 +87,7 @@ const parseNumber = (value) => {
     const number = parseFloat(value);
     return isNaN(number) ? 0 : number;
 };
+
 // ====================================================================
 // NEW HELPER: Get the correct payment status for the tracker view
 // ====================================================================
@@ -95,10 +95,8 @@ const parseNumber = (value) => {
  * Determines the correct payment status column based on which advocate matches the tracker's selected advocate.
  * @param {object} record - The loan record object.
  * @param {string} currentAdvocate - The name of the advocate selected in the tracker dropdown.
- * @returns {string} The status value or 'N/A'.
+ * @returns {string} The status value or 'Processing' if unset.
  */
-// NEW HELPER: Get the correct payment status for the tracker view
-// Function: getAdvocatePaymentStatusForTracker
 function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
     if (!record || !currentAdvocate) return 'N/A';
     
@@ -117,6 +115,7 @@ function getAdvocatePaymentStatusForTracker(record, currentAdvocate) {
     return 'N/A'; // Advocate not associated with this record
 }
 
+
 // Helper function to format currency for display
 function formatCurrency(value) {
     const number = parseNumber(value);
@@ -124,7 +123,7 @@ function formatCurrency(value) {
     return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 }
 
-// Function to calculate net total for any group of charges (used for Snapshot Box/Other Charges)
+// Function to calculate net total for any group of charges 
 function calculateChargesNet(record, fields) {
     let total = 0;
     
@@ -141,7 +140,7 @@ function calculateChargesNet(record, fields) {
 
 /**
  * Function to calculate the required Advocate Fee Payment Net (Fees - TDS, ignoring GST)
- * @param {object} record - The loan record.
+ * @param {object} record - The loan record object.
  * @param {string[]} feeFields - The list of fields containing fees (excluding GST fields).
  * @returns {number} The net payment amount.
  */
@@ -161,9 +160,31 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
     return totalNet;
 }
 
-// --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
-// (Your CHARGE_DEFINITIONS_138, CHARGE_DEFINITIONS_09, and CHARGE_FIELDS_FOR_SNAPSHOT definitions go here)
+// Helper to calculate the total Net Fee for a group of records for the selected advocate
+function calculateAdvocateTotalNetFee(records, advocateName) {
+    let totalNetFee = 0;
+    const normalizedAdvocate = String(advocateName).trim();
+    
+    records.forEach(record => {
+        const is138Advocate = String(record['ADVOCATE']).trim() === normalizedAdvocate;
+        const isSec9Advocate = String(record['Sec/9 Advocate']).trim() === normalizedAdvocate;
 
+        // An advocate might be associated with both, so we sum both section fees if applicable
+        if (is138Advocate) {
+            // Calculate 138 fees net
+            totalNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+        }
+        if (isSec9Advocate) {
+            // Calculate Sec 9 fees net
+            totalNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+        }
+    });
+
+    return totalNetFee;
+}
+
+
+// --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
 const CHARGE_DEFINITIONS_138 = {
     // Fields that contribute to the NET calculation (Fees - TDS, ignoring GST)
     "AdvocateFeeNetFields": [
@@ -181,7 +202,7 @@ const CHARGE_DEFINITIONS_138 = {
         "GST of Final fee for Sec 138",
         "TDS of Final fee for Sec 138",
     ],
-    // Other Charges Net Group (Included in Block 5 total but separate from Advocate Fee Net)
+    // Other Charges Net Group
     "OtherChargesFields": [
         "Cheque Return Charges",
         "POA for Filing Sec 138",
@@ -208,7 +229,7 @@ const CHARGE_DEFINITIONS_09 = {
         "GST of Final Fee For Sec 09",
         "TDS of Final Fee For Sec 09",
     ],
-    // Other Charges Net Group (Included in Block 6 total but separate from Advocate Fee Net)
+    // Other Charges Net Group
     "OtherChargesFields": [
         "Taken Expense for Sec 09 filing",
         "POA for Filing Sec 09",
@@ -232,6 +253,8 @@ const CHARGE_FIELDS_FOR_SNAPSHOT = [
 
 // Helper function to calculate the total for the Snapshot Box
 function calculateTotalCharges(record) {
+    // Note: The original function calculates total for the loan view, not the tracker. 
+    // We will keep it for Block 5 & 6 totals in the main search view.
     return calculateChargesNet(record, CHARGE_FIELDS_FOR_SNAPSHOT.map(f => f));
 }
 
@@ -346,24 +369,25 @@ const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
+// const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box'); // Original snapshot box
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
 const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 
-// Elements for Advocate Tracker
+// Elements for Advocate Tracker (Updated/New Constants for the fix)
 const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
+const ADVOCATE_TRACKER_INITIAL_MESSAGE = document.getElementById('advocate-tracker-initial-message');
+// These two elements must be added to index.html
+const ADVOCATE_PAYMENT_SNAPSHOT_BOX = document.getElementById('advocate-payment-snapshot-box'); 
+const ADVOCATE_PAYMENTS_TABLE_CONTAINER = document.getElementById('advocate-payments-table-container');
 
 
 // ====================================================================
 // 3. DROPDOWN POPULATION & CORE LOGIC
 // ====================================================================
 
-/**
- * REQUIRED FIX: Defines the function called by initialLoad.
- */
 function populateBranchDropdown(branches) {
     BRANCH_SELECT.innerHTML = '<option value="">-- Select Branch --</option>';
     branches.forEach(branch => {
@@ -374,9 +398,18 @@ function populateBranchDropdown(branches) {
     });
 }
 
-/**
- * REQUIRED FIX: Defines the function called by initialLoad.
- */
+function populateLoanDropdown(loans) {
+    LOAN_SELECT.innerHTML = '<option value="">-- Select Loan --</option>';
+    loans.forEach(loan => {
+        const option = document.createElement('option');
+        option.value = loan;
+        option.textContent = loan;
+        LOAN_SELECT.appendChild(option);
+    });
+    LOAN_SELECT.disabled = loans.length === 0;
+    SEARCH_BUTTON.disabled = true;
+}
+
 function populateAdvocateDropdown(advocates) {
     ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Select Advocate --</option>';
     advocates.forEach(advocate => {
@@ -389,19 +422,20 @@ function populateAdvocateDropdown(advocates) {
 
 /**
  * CORE FUNCTION: Fetches all data and initializes the application.
- * This is now defined AFTER the functions it calls.
  */
 async function initialLoad() {
     LOADING_STATUS.textContent = 'Loading all data from server...';
     LOADING_STATUS.style.display = 'block';
     
     try {
+        // Assume API_URL is configured to handle the main data fetch
         const response = await fetch(API_URL);
         const result = await response.json();
         
         if (result.status === 'success') {
             ALL_RECORDS = result.data;
-            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))];
+            // Get unique branches
+            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))].sort();
             
             // Populate branch dropdown
             populateBranchDropdown(branches);
@@ -436,201 +470,190 @@ async function initialLoad() {
 // CRITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
 
-// All other functions and event listeners should follow here:
-// e.g., showInputForm(), handleLoanSelectChange(), displayLoanRecord(), 
-// ====================================================================
+// Event Handlers for Loan Search
+BRANCH_SELECT.addEventListener('change', handleBranchSelectChange);
+LOAN_SELECT.addEventListener('change', handleLoanSelectChange);
+SEARCH_BUTTON.addEventListener('click', displayLoanRecord);
+ADVOCATE_FEE_TOGGLE.addEventListener('change', toggleAdvocateFeeBlocks);
 
-// ====================================================================
-// 2. CORE FUNCTIONS (Initial Fetch)
-// ====================================================================
 
-/**
- * CORE FUNCTION: Fetches all data and initializes the application.
- * Place the full content of your initialLoad function here.
- * NOTE: This function must be defined before the DOMContentLoaded listener.
- */
-async function initialLoad() {
-    LOADING_STATUS.textContent = 'Loading all data from server...';
-    LOADING_STATUS.style.display = 'block';
-    
-    try {
-        const response = await fetch(API_URL);
-        const result = await response.json();
-        
-        if (result.status === 'success') {
-            ALL_RECORDS = result.data;
-            const branches = [...new Set(ALL_RECORDS.map(record => record['Loan Branch']).filter(b => b))];
-            
-            // Populate branch dropdown
-            populateBranchDropdown(branches);
-            
-            // Populate advocate dropdown for the tracker
-            const advocates = [...new Set(
-                ALL_RECORDS.flatMap(record => [record['ADVOCATE'], record['Sec/9 Advocate']])
-                           .filter(a => a)
-                           .map(a => String(a).trim())
-            )].sort();
-            populateAdvocateDropdown(advocates);
-
-            LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
-            LOADING_STATUS.style.color = 'var(--color-success)';
-        } else {
-            LOADING_STATUS.textContent = `❌ Error fetching data: ${result.message}`;
-            LOADING_STATUS.style.color = 'var(--color-danger)';
-        }
-    } catch (error) {
-        console.error("Fetch Error:", error);
-        LOADING_STATUS.textContent = `❌ Network Error: Could not connect to API.`;
-        LOADING_STATUS.style.color = 'var(--color-danger)';
-    } finally {
-        // Hide loading status after a brief delay
-        setTimeout(() => {
-            LOADING_STATUS.style.display = 'none';
-        }, 2000);
+function handleBranchSelectChange() {
+    const selectedBranch = BRANCH_SELECT.value;
+    if (selectedBranch) {
+        const loans = ALL_RECORDS
+            .filter(record => record['Loan Branch'] === selectedBranch)
+            .map(record => record['Loan No'])
+            .sort();
+        populateLoanDropdown(loans);
+        LOAN_SELECT.disabled = false;
+        // Clear previous view
+        DATA_BLOCKS_CONTAINER.innerHTML = '';
+        NOT_FOUND_MESSAGE.style.display = 'none';
+        window.CURRENT_LOAN_RECORD = null;
+    } else {
+        populateLoanDropdown([]);
     }
 }
 
-
-
-
-// CRITICAL: Initialize the data fetch on page load
-document.addEventListener('DOMContentLoaded', initialLoad);
-// ====================================================================
-// 3. WRITE OPERATION: Handles POST requests (Data Submission) - FINAL FIX FOR TWO ADVOCATE COLUMNS
-// ====================================================================
-function doPost(e) {
-  try {
-    const raw = e.postData && e.postData.contents ? e.postData.contents : '{}';
-    const requestData = JSON.parse(raw);
-
-    // AUTH CHECK
-    if (requestData.authKey !== GOOGLE_SERVICE_ACCOUNT_CREDENTIALS) {
-      const errorData = { status: 'error', message: 'Authorization failed. Invalid secret key.' };
-      return sendJson_(errorData, null);
-    }
-    
-    // CRITICAL: We require Loan No AND ADVOCATE field (the name of the person being paid)
-    const loanNo = requestData["Loan No"];
-    const advocateName = requestData["ADVOCATE"]; 
-    
-    if (!loanNo || !advocateName) {
-        const missingField = !loanNo ? '"Loan No"' : '"ADVOCATE"';
-        const errorData = { status: 'error', message: `Required field ${missingField} is missing for update. Front-end must send Loan No AND the Target Advocate's Name under the key 'ADVOCATE'.` };
-        return sendJson_(errorData, null);
-    }
-
-    const ss = SpreadsheetApp.openById(SPREADSHEET_ID);
-    let sheet = ss.getSheetByName(SHEET_NAME);
-    if (!sheet) {
-      const errorData = { status: 'error', message: `Sheet named ${SHEET_NAME} not found.` };
-      return sendJson_(errorData, null);
-    }
-
-    // 1. Get all data and headers
-    const range = sheet.getDataRange();
-    const values = range.getValues();
-    
-    if (values.length === 0) {
-        const errorData = { status: 'error', message: 'Sheet is empty. Cannot update.' };
-        return sendJson_(errorData, null);
-    }
-    
-    const headers = values[0].map(h => (typeof h === 'string' ? h.trim() : h));
-    
-    // Find the column indices for unique identification
-    const loanNoColIndex = headers.findIndex(h => h.toUpperCase() === 'LOAN NO');
-    const advocateColIndex = headers.findIndex(h => h.toUpperCase() === 'ADVOCATE');
-    const sec9AdvocateColIndex = headers.findIndex(h => h.toUpperCase() === 'SEC/9 ADVOCATE'); // Secondary advocate column
-
-    if (loanNoColIndex === -1 || (advocateColIndex === -1 && sec9AdvocateColIndex === -1)) {
-        const missingHeader = loanNoColIndex === -1 ? '"Loan No"' : 'Advocate column';
-        const errorData = { status: 'error', message: `Required column ${missingHeader} not found in headers.` };
-        return sendJson_(errorData, null);
-    }
-    
-    const normalizedLoanNo = String(loanNo).trim();
-    const normalizedAdvocateName = String(advocateName).trim();
-    
-    // 2. Find the Unique Row Index using Loan No AND a match in EITHER advocate column
-    let targetRowIndex = -1;
-    for (let i = 1; i < values.length; i++) {
-        const rowLoanNo = values[i][loanNoColIndex];
-        
-        // Check if Loan No matches
-        if (rowLoanNo && String(rowLoanNo).trim() === normalizedLoanNo) {
-            
-            let advocateMatch = false;
-            
-            // Check the primary ADVOCATE column
-            if (advocateColIndex !== -1) {
-                const rowAdvocateName = values[i][advocateColIndex];
-                if (rowAdvocateName && String(rowAdvocateName).trim() === normalizedAdvocateName) {
-                    advocateMatch = true;
-                }
-            }
-            
-            // Check the secondary Sec/9 Advocate column
-            if (!advocateMatch && sec9AdvocateColIndex !== -1) {
-                const rowSec9AdvocateName = values[i][sec9AdvocateColIndex];
-                if (rowSec9AdvocateName && String(rowSec9AdvocateName).trim() === normalizedAdvocateName) {
-                    advocateMatch = true;
-                }
-            }
-            
-            if (advocateMatch) {
-                // targetRowIndex is the row number in the sheet (1-based)
-                targetRowIndex = i + 1; 
-                break;
-            }
-        }
-    }
-    
-    if (targetRowIndex === -1) {
-        const errorData = { status: 'error', message: `Record for Loan No ${loanNo} and Advocate ${advocateName} not found in sheet. Check spelling and case.` };
-        return sendJson_(errorData, null);
-    }
-    
-    // 3. Update the specific fields
-    const updatedFields = [];
-    
-    for (const field of Object.keys(requestData)) {
-        // Skip keys used for identification
-        if (field === 'authKey' || field === 'Loan No' || field === 'ADVOCATE') continue;
-        
-        const colIndex = headers.findIndex(h => h === field);
-        
-        if (colIndex !== -1) {
-            // Column index in the sheet is 1-based, so colIndex + 1
-            const cellRange = sheet.getRange(targetRowIndex, colIndex + 1);
-            cellRange.setValue(requestData[field]);
-            updatedFields.push(field);
-        } else {
-            Logger.log(`WARNING: Field "${field}" not found in sheet headers.`);
-        }
-    }
-
-    if (updatedFields.length === 0) {
-        const errorData = { status: 'error', message: 'No recognized fields provided for update.' };
-        return sendJson_(errorData, null);
-    }
-
-    const successData = { status: 'success', message: `Record ${loanNo} for Advocate ${advocateName} updated successfully for fields: ${updatedFields.join(', ')}.` };
-    return sendJson_(successData, null);
-
-  } catch (error) {
-    Logger.log("POST Error: " + error.toString());
-    const errorData = { status: 'error', message: error.toString() };
-    return sendJson_(errorData, null);
-  }
+function handleLoanSelectChange() {
+    SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+    NOT_FOUND_MESSAGE.style.display = 'none';
+    window.CURRENT_LOAN_RECORD = null;
 }
 
+function toggleAdvocateFeeBlocks() {
+    const show = ADVOCATE_FEE_TOGGLE.checked;
+    
+    // Find blocks 5 and 6 and toggle their visibility
+    const blocks = DATA_BLOCKS_CONTAINER.querySelectorAll('.data-block');
+    blocks.forEach(block => {
+        const header = block.querySelector('.block-header h3').textContent;
+        if (header.startsWith('5)') || header.startsWith('6)')) {
+            block.style.display = show ? 'block' : 'none';
+        }
+    });
+}
+
+
+function displayLoanRecord() {
+    const selectedLoan = LOAN_SELECT.value;
+    const selectedRecord = ALL_RECORDS.find(record => record['Loan No'] === selectedLoan);
+    
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+    NOT_FOUND_MESSAGE.style.display = 'none';
+    window.CURRENT_LOAN_RECORD = null;
+    
+    if (selectedRecord) {
+        window.CURRENT_LOAN_RECORD = selectedRecord;
+        
+        // 1. Render all data blocks
+        renderDataBlocks(selectedRecord);
+        
+        // 2. Apply toggle state
+        toggleAdvocateFeeBlocks();
+
+    } else {
+        NOT_FOUND_MESSAGE.textContent = `Loan No. ${selectedLoan} not found in the loaded data.`;
+        NOT_FOUND_MESSAGE.style.display = 'block';
+    }
+}
+
+// Function to render the entire data view
+function renderDataBlocks(record) {
+    let blocksHtml = '';
+
+    // Loop through defined blocks
+    DISPLAY_BLOCKS.forEach(blockDef => {
+        let blockContent = '';
+        let isFourColumn = blockDef.title.startsWith('5)') || blockDef.title.startsWith('6)');
+        let hasTotal = blockDef.title.startsWith('5)') || blockDef.title.startsWith('6)');
+        
+        // Build individual field rows
+        for (const [backendKey, displayLabel] of Object.entries(blockDef.fields)) {
+            let value = record[backendKey];
+            
+            // Format dates
+            if (DATE_FIELDS.includes(backendKey)) {
+                value = formatDate(value);
+            }
+            
+            // Format numbers (Amounts) - exclude non-amount fields if needed
+            if (['Loan Amount', 'EMI', 'Arrear Amount', 'Loan Balance'].includes(backendKey) || 
+                backendKey.toLowerCase().includes('fee') || backendKey.toLowerCase().includes('charge') || 
+                backendKey.toLowerCase().includes('expense') || backendKey.toLowerCase().includes('tds') || 
+                backendKey.toLowerCase().includes('amt')) {
+                value = formatCurrency(value);
+            }
+            
+            // Apply critical highlighting
+            let valueClass = '';
+            if (CRITICAL_FIELDS.includes(backendKey) && (parseNumber(record[backendKey]) > 0 || String(value).trim() !== 'N/A')) {
+                valueClass = 'critical-value';
+            }
+            
+            // Apply minus-value class for TDS (deductions)
+            if (backendKey.toLowerCase().includes('tds')) {
+                valueClass += ' minus-value';
+            }
+            
+            blockContent += `
+                <div class="data-block-item">
+                    <span class="item-label">${displayLabel}:</span>
+                    <span class="item-value ${valueClass}">${value || 'N/A'}</span>
+                </div>
+            `;
+        }
+        
+        // Add Subtotals for Blocks 5 and 6
+        if (hasTotal) {
+            const is138 = blockDef.title.startsWith('5)');
+            const definitions = is138 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
+            
+            // 1. Advocate Fee Net (Fees - TDS)
+            const feeNet = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
+            blockContent += `
+                <div class="data-block-item advocate-fee-net subtotal-row">
+                    <span class="item-label">Advocate Fee Net:</span>
+                    <span class="item-value">${formatCurrency(feeNet)}</span>
+                </div>
+            `;
+            
+            // 2. Other Charges Net
+            const otherChargesNet = calculateChargesNet(record, definitions.OtherChargesFields);
+            blockContent += `
+                <div class="data-block-item other-charges-net subtotal-row">
+                    <span class="item-label">Other Charges Net:</span>
+                    <span class="item-value">${formatCurrency(otherChargesNet)}</span>
+                </div>
+            `;
+            
+            // 3. Section Grand Total (Advocate Fee Net + Other Charges Net)
+            const grandTotal = feeNet + otherChargesNet;
+            blockContent += `
+                <div class="data-block-item block-total-net subtotal-row">
+                    <span class="item-label">${blockDef.title.replace(/\d\)/, 'Section')} TOTAL CHARGES:</span>
+                    <span class="item-value">${formatCurrency(grandTotal)}</span>
+                </div>
+            `;
+        }
+
+        // Final Block structure with accordion controls
+        blocksHtml += `
+            <div class="data-block">
+                <div class="block-header accordion-header expanded">
+                    <h3>${blockDef.title}</h3>
+                    <span class="accordion-icon">▶</span>
+                </div>
+                <div class="data-block-content-wrapper accordion-content expanded">
+                    <div class="data-block-content ${isFourColumn ? 'four-column' : ''}">
+                        ${blockContent}
+                    </div>
+                </div>
+            </div>
+        `;
+    });
+
+    DATA_BLOCKS_CONTAINER.innerHTML = blocksHtml;
+
+    // Attach accordion listeners
+    document.querySelectorAll('.accordion-header').forEach(header => {
+        header.addEventListener('click', function() {
+            this.classList.toggle('expanded');
+            const contentWrapper = this.nextElementSibling;
+            contentWrapper.classList.toggle('expanded');
+        });
+    });
+}
+
+
 // ====================================================================
-// 4. ADVOCATE TRACKER LOGIC
+// 4. ADVOCATE TRACKER LOGIC (FIX IMPLEMENTED HERE)
 // ====================================================================
 
 // Helper to determine CSS class for status tag
 function getStatusClassName(status) {
-    const s = status.toLowerCase();
+    const s = String(status).toLowerCase();
     if (s === 'paid') return 'status-paid';
     if (s === 'processing') return 'status-processing';
     if (s === 'rejected') return 'status-rejected';
@@ -640,24 +663,18 @@ function getStatusClassName(status) {
 // Function to convert the cell content back to the disabled tag (Final State)
 function revertToTag(tdElement, newStatus, loanNo, advocateName) {
     const statusClass = getStatusClassName(newStatus);
+    // CRITICAL: Ensure the paymentField data attribute is correctly captured from the tdElement if it exists
+    const paymentField = tdElement ? tdElement.dataset.paymentField : ''; 
     
     // HTML content for the disabled tag with the Edit option
-    const htmlContent = `
-        <div class="status-tag ${statusClass}">
-            ${newStatus}
-            <span class="edit-icon" 
-                  data-loan-no="${loanNo}" 
-                  data-advocate="${advocateName}" 
-                  data-current-status="${newStatus}"
-                  title="Click to edit status (password required)">
-                ✍️ Edit
-            </span>
-        </div>
+    const htmlContent = ` 
+        <div class="status-tag ${statusClass}"> ${newStatus} 
+            <span class="edit-icon" data-loan-no="${loanNo}" data-advocate="${advocateName}" data-current-status="${newStatus}" data-payment-field="${paymentField}" title="Click to edit status (password required)"> ✍️ Edit </span> 
+        </div> 
     `;
-
+    
     if (tdElement) {
         tdElement.innerHTML = htmlContent;
-        
         // Re-attach listener to the newly created Edit icon
         const editIcon = tdElement.querySelector('.edit-icon');
         if (editIcon) {
@@ -667,7 +684,6 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
         }
         return;
     }
-    
     // Used during initial table render
     return htmlContent;
 }
@@ -676,745 +692,306 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
 function showPasscodePopup(iconElement) {
     const loanNo = iconElement.dataset.loanNo;
     const currentStatus = iconElement.dataset.currentStatus;
-    const tdElement = iconElement.closest('.status-cell'); 
+    const tdElement = iconElement.closest('.status-cell');
     const advocateName = iconElement.dataset.advocate;
-
+    const paymentField = iconElement.dataset.paymentField; // CRITICAL: Get payment field from icon
+    
     // 1. Ask for password
     const password = prompt("Enter password to change status:");
-
-    if (password === CLIENT_SIDE_AUTH_KEY) { 
+    
+    if (password === CLIENT_SIDE_AUTH_KEY) {
         // 2. Password accepted, enable edit
-        enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName);
-    } else if (password !== null && password !== '') { 
+        enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName, paymentField);
+    } else if (password !== null && password !== '') {
         alert("Incorrect password. Status update aborted.");
     }
 }
 
-// ---------- helper: sanitize a string to a safe DOM id ----------
-function toSafeId(str) {
-  if (str === undefined || str === null) return '';
-  return String(str).trim().replace(/[^A-Za-z0-9\-_]/g, '_'); // only letters, numbers, dash, underscore
-}
+// ---------- UPDATED enableStatusDropdown (uses paymentField) ----------
+function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName, paymentField) {
+    if (!tdElement || !paymentField) return;
 
-// ---------- new enableStatusDropdown (build elements & listeners safely) ----------
-function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
-    // ensure tdElement exists
-    if (!tdElement) return;
+    // 1. Build the dropdown options
+    let optionsHtml = STATUS_OPTIONS.map(status => {
+        const selected = status === currentStatus ? 'selected' : '';
+        return `<option value="${status}" ${selected}>${status}</option>`;
+    }).join('');
+    
+    // 2. Construct the form HTML
+    // Note: The select name is the backend column (e.g., '138 Payment')
+    const formHtml = `
+        <form class="status-update-form" data-loan-no="${loanNo}" data-advocate="${advocateName}">
+            <select name="${paymentField}" class="status-select">
+                ${optionsHtml}
+            </select>
+            <button type="submit" class="submit-status-button">Save</button>
+            <button type="button" class="cancel-status-button">Cancel</button>
+        </form>
+        <span class="update-message"></span>
+    `;
+    
+    tdElement.innerHTML = formHtml;
 
-    const safeLoanId = toSafeId(loanNo);
-    const selectId = `status-select-${safeLoanId}`;
-    const cellId = `status-cell-${safeLoanId}`;
-
-    // create wrapper
-    const wrapper = document.createElement('div');
-    wrapper.className = 'status-edit-mode';
-
-    // dropdown
-    const select = document.createElement('select');
-    select.id = selectId;
-    select.className = 'status-select';
-    select.dataset.originalStatus = currentStatus || '';
-    select.dataset.loanNo = loanNo;
-    select.dataset.advocate = advocateName || '';
-
-    // Ensure STATUS_OPTIONS is defined somewhere else in your script.
-    if (Array.isArray(STATUS_OPTIONS)) {
-      STATUS_OPTIONS.forEach(opt => {
-          const o = document.createElement('option');
-          o.value = opt;
-          o.textContent = opt;
-          if (opt === currentStatus) o.selected = true;
-          select.appendChild(o);
-      });
-    } else {
-      // fallback: add currentStatus as a single option if STATUS_OPTIONS missing
-      const o = document.createElement('option');
-      o.value = currentStatus || 'Processing';
-      o.textContent = currentStatus || 'Processing';
-      select.appendChild(o);
-    }
-
-    // buttons container
-    const btnWrap = document.createElement('div');
-    btnWrap.className = 'status-buttons';
-
-    // Save button
-    const saveBtn = document.createElement('button');
-    saveBtn.type = 'button';
-    saveBtn.className = 'status-save-btn';
-    saveBtn.textContent = 'Save';
-    saveBtn.addEventListener('click', async function (evt) {
-        // show saving
-        tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
-        // get selected value
-        const newStatus = select.value;
-        try {
-            await confirmSaveStatus(loanNo, newStatus, tdElement); // pass DOM tdElement
-        } catch (err) {
-            console.error('Unexpected error in save click:', err);
-            revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
-        }
+    // 3. Attach event listeners to the new elements
+    const form = tdElement.querySelector('.status-update-form');
+    form.addEventListener('submit', function(event) {
+        event.preventDefault();
+        const newStatus = this.querySelector('.status-select').value;
+        submitStatusUpdate(this, newStatus, loanNo, advocateName, paymentField, tdElement, currentStatus);
     });
 
-    // Cancel button
-    const cancelBtn = document.createElement('button');
-    cancelBtn.type = 'button';
-    cancelBtn.className = 'status-cancel-btn';
-    cancelBtn.textContent = 'Cancel';
-    cancelBtn.addEventListener('click', function () {
-        revertToTag(tdElement, select.dataset.originalStatus || 'Processing', loanNo, advocateName);
+    const cancelButton = tdElement.querySelector('.cancel-status-button');
+    cancelButton.addEventListener('click', function() {
+        // Revert to the previous status tag (use the original status for the cancel)
+        revertToTag(tdElement, currentStatus, loanNo, advocateName);
     });
-
-    btnWrap.appendChild(saveBtn);
-    btnWrap.appendChild(cancelBtn);
-
-    wrapper.appendChild(select);
-    wrapper.appendChild(btnWrap);
-
-    tdElement.id = cellId;
-    tdElement.innerHTML = ''; // clear old contents
-    tdElement.appendChild(wrapper);
 }
+// ----------------------------------------------------------------------------
 
 
-
-// 4.3. Function to revert to the disabled state without saving
-function cancelStatusEdit(tdElement, originalStatus, loanNo, advocateName) {
-    revertToTag(tdElement, originalStatus, loanNo, advocateName);
-}
-
-
-// ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
-
-async function confirmSaveStatus(loanNo, newStatus, tdElement) {
-    const sel = tdElement.querySelector('.status-select');
-    const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
+// Function to handle submission of status update
+async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, paymentField, tdElement, originalStatus) {
+    const updateMessage = tdElement.querySelector('.update-message');
+    updateMessage.textContent = 'Submitting...';
     
-    // Get advocate name from the global filtering dropdown
-    const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
-
-    if (!newStatus || newStatus === originalStatus) {
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
-        return;
-    }
-
-    // --- CRITICAL FIX: Determine the actual COLUMN HEADER ---
-    const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
-    let targetColumn = '';
-    
-    if (record) {
-        const normalizedAdvocate = currentAdvocate.trim();
-        
-        // 1. If the current advocate is the primary 'ADVOCATE' (BO), use '138 Payment'
-        if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment'; // <-- FIX: Use actual BO column header
-        } 
-        // 2. If the current advocate is the secondary 'Sec/9 Advocate' (BP), use 'sec9 Payment'
-        else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment'; // <-- FIX: Use actual BP column header
-        }
-    }
-    
-    if (!targetColumn) {
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
-        alert("Error: Cannot determine the correct payment column. Update aborted.");
-        return;
-    }
-
-    // 2. Build the payload using the determined actual column header (targetColumn)
-    const dataToSend = {
-        // This will be {"138 Payment": "New Status"} or {"sec9 Payment": "New Status"}
-        [targetColumn]: newStatus,
+    const requestBody = {
+        authKey: CLIENT_SIDE_AUTH_KEY,
         "Loan No": loanNo,
-        "ADVOCATE_ID": currentAdvocate, // Used for row matching
-        "authKey": (typeof CLIENT_SIDE_AUTH_KEY !== 'undefined') ? CLIENT_SIDE_AUTH_KEY : ''
+        "ADVOCATE": advocateName, // This is the identifier for the backend function 
+        [paymentField]: newStatus // The actual field to update: '138 Payment' or 'sec9 Payment'
     };
-
-    // ... rest of the fetch logic remains the same ...
+    
     try {
-        if (tdElement) tdElement.innerHTML = `<span class="status-saving">Saving...</span>`;
-        const response = await fetch(API_URL, { 
-            method: 'POST', 
-            mode: 'cors', 
-            headers: { 'Content-Type': 'application/json' }, 
-            body: JSON.stringify(dataToSend) 
+        // Assuming API_URL is used for POST requests to your Netlify function (or similar backend)
+        const response = await fetch(API_URL, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
 
-        if (result && result.status === 'success') {
-            // Update local cache and display
-            const updatedRecord = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
-            if (updatedRecord) {
-                // Update the correct column in the cache (e.g., updatedRecord['138 Payment'] = 'Paid')
-                updatedRecord[targetColumn] = newStatus;
+        if (result.status === 'success') {
+            updateMessage.textContent = '✅ Saved! Reloading...';
+            
+            // Update the local ALL_RECORDS object
+            const recordToUpdate = ALL_RECORDS.find(r => 
+                String(r['Loan No']).trim() === String(loanNo).trim()
+            );
+
+            if (recordToUpdate) {
+                // Update the correct payment field in the local cache
+                recordToUpdate[paymentField] = newStatus;
             }
-            revertToTag(tdElement, newStatus, loanNo, currentAdvocate);
+
+            // Re-render the Advocate Payments View to reflect the change
+            const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+            const filteredRecords = ALL_RECORDS.filter(record => 
+                String(record['ADVOCATE']).trim() === selectedAdvocate || 
+                String(record['Sec/9 Advocate']).trim() === selectedAdvocate
+            );
+            
+            // Wait for a second to show the success message, then re-render
+            setTimeout(() => {
+                displayAdvocatePaymentSummary(filteredRecords, selectedAdvocate);
+            }, 1000);
+
         } else {
-            alert(`❌ Status update failed: ${result.message}`);
-            revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+            updateMessage.textContent = `❌ Error: ${result.message || 'Server error'}`;
+            // Revert on error
+            revertToTag(tdElement, originalStatus, loanNo, advocateName);
         }
+
     } catch (error) {
-        console.error('Error saving status:', error);
-        alert('❌ Network or server error during update. Check console.');
-        revertToTag(tdElement, originalStatus, loanNo, currentAdvocate);
+        updateMessage.textContent = '❌ Network Error. Status update failed.';
+        console.error("Error submitting status:", error);
+        // Revert on network error
+        revertToTag(tdElement, originalStatus, loanNo, advocateName);
     }
 }
+// ----------------------------------------------------------------------------
 
-// 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Branch and Clickable Net Fee)
-ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
-function displayAdvocateSummary(selectedAdvocate) {
-    
-    if (!selectedAdvocate) {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
-        return;
+// Function to generate the payment summary and display it
+function displayAdvocatePaymentSummary(records, advocateName) {
+    // Check if the new DOM elements exist (must be in index.html)
+    if (!ADVOCATE_PAYMENT_SNAPSHOT_BOX || !ADVOCATE_PAYMENTS_TABLE_CONTAINER) {
+         ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p style="color:red;">Error: Required summary elements (advocate-payment-snapshot-box and advocate-payments-table-container) are missing from index.html.</p>';
+         return;
     }
-
-    const filteredRecords = ALL_RECORDS.filter(record => 
-        String(record["ADVOCATE"] || '').trim() === selectedAdvocate ||
-        String(record["Sec/9 Advocate"] || '').trim() === selectedAdvocate
-    );
     
-    if (filteredRecords.length === 0) {
-        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No payment records found for Advocate: ${selectedAdvocate}.</p>`;
-        return;
-    }
+    ADVOCATE_TRACKER_INITIAL_MESSAGE.style.display = 'none';
+    ADVOCATE_PAYMENTS_TABLE_CONTAINER.innerHTML = '';
+    ADVOCATE_PAYMENT_SNAPSHOT_BOX.innerHTML = '';
+    ADVOCATE_PAYMENT_SNAPSHOT_BOX.classList.add('loan-snapshot-box'); 
+    ADVOCATE_PAYMENT_SNAPSHOT_BOX.style.display = 'flex'; 
 
-    let tableHTML = `
-        <table class="advocate-summary-table">
+    // 1. Calculate and render Snapshot/Total Box (Total Fee Net)
+    const totalFeeNet = calculateAdvocateTotalNetFee(records, advocateName);
+    
+    const totalHtml = `
+        <div class="snapshot-item total-color">
+            <span class="label">Total Fee Net (Across ${records.length} Loans)</span>
+            <span class="value">${formatCurrency(totalFeeNet)}</span>
+        </div>
+        <div class="snapshot-item primary">
+            <span class="label">Advocate Name</span>
+            <span class="value">${advocateName}</span>
+        </div>
+        <div class="snapshot-item success">
+            <span class="label">Total Loans Tracked</span>
+            <span class="value">${records.length}</span>
+        </div>
+    `;
+    
+    ADVOCATE_PAYMENT_SNAPSHOT_BOX.innerHTML = totalHtml;
+    
+    // 2. Render the Detailed Loans Table
+    let tableHtml = `
+        <table class="data-table">
             <thead>
                 <tr>
                     <th>Loan No</th>
-                    <th>Branch</th>
                     <th>Customer Name</th>
-                    <th>Sections</th>
-                    <th>${STATUS_FIELD}</th>
-                    <th class="right-align">Total Fee Net (Click for Breakdown)</th>
+                    <th>Loan Date</th>
+                    <th>Total Fee Net</th>
+                    <th>Current Payment Status (Fetched)</th> 
+                    <th>${STATUS_FIELD} (Edit Only)</th> 
                 </tr>
             </thead>
             <tbody>
     `;
-    
-    let grandTotalNet = 0;
 
-    filteredRecords.forEach(record => {
-        const loanNo = record["Loan No"];
-        const branchName = record["Loan Branch"] || 'N/A'; // New Branch Field
-        const custName = record["Customer Name"] || 'N/A';
-        const statusValue = record[STATUS_FIELD] || 'Processing'; 
+    records.forEach(record => {
+        const loanNo = record['Loan No'];
+        const customerName = record['Customer Name'];
+        const loanDate = formatDate(record['Loandate']);
         
-        // Calculate Net Fee for Sec 138 (Fees - TDS)
-        const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-        // Calculate Net Fee for Sec 09 (Fees - TDS)
-        const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+        let netFee = 0;
+        let paymentField = ''; // The field to be updated in the backend (e.g., '138 Payment')
+        let section = 'N/A';
         
-        // Combine both net fees for the grand total and display
-        const totalFeeNet = feeNet138 + feeNet09;
-        grandTotalNet += totalFeeNet;
+        const is138Advocate = String(record['ADVOCATE']).trim() === String(advocateName).trim();
+        const isSec9Advocate = String(record['Sec/9 Advocate']).trim() === String(advocateName).trim();
         
-        const sections = [];
-        if (String(record["ADVOCATE"] || '').trim() === selectedAdvocate) sections.push("Sec 138");
-        if (String(record["Sec/9 Advocate"] || '').trim() === selectedAdvocate) sections.push("Sec 09");
-
-        tableHTML += `
-            <tr id="row-${loanNo}">
-                <td data-label="Loan No">${loanNo}</td>
-                <td data-label="Branch">${branchName}</td> <td data-label="Customer Name">${custName}</td>
-                <td data-label="Sections">${sections.join(' & ')}</td>
-                <td data-label="Status" id="status-cell-${loanNo}" class="status-cell">
-                    ${revertToTag(null, statusValue, loanNo, selectedAdvocate)}
-                </td>
-                <td data-label="Total Net" class="right-align total-net-cell">
-                    <button class="breakdown-button" 
-                            data-loan-no="${loanNo}" 
-                            data-advocate="${selectedAdvocate}"
-                            onclick="showFeeBreakdown(this)">
-                        ${formatCurrency(totalFeeNet)}
-                    </button>
-                </td>
-            </tr>
-            <tr id="breakdown-row-${loanNo}" class="fee-breakdown-row" style="display: none;">
-                <td colspan="6"></td>
-            </tr>
-        `;
-    });
-
-    tableHTML += `
-            <tr class="grand-total-row">
-                <td colspan="5" style="text-align: right; font-weight: 700;">GRAND TOTAL (NET):</td>
-                <td style="font-weight: 700; color: var(--color-primary);" class="right-align">${formatCurrency(grandTotalNet)}</td>
-            </tr>
-        </tbody>
-    </table>
-    `;
-
-    ADVOCATE_PAYMENTS_VIEW.innerHTML = tableHTML;
-    
-    // Re-attach listeners for the Edit Icons
-    document.querySelectorAll('.edit-icon').forEach(icon => {
-        icon.addEventListener('click', function() {
-            showPasscodePopup(this);
-        });
-    });
-
-    LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
-}
-
-// 4.6. NEW FUNCTION: Show Fee Breakdown
-function showFeeBreakdown(buttonElement) {
-    const loanNo = buttonElement.dataset.loanNo;
-    const advocateName = buttonElement.dataset.advocate;
-    const breakdownRow = document.getElementById(`breakdown-row-${loanNo}`);
-    const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
-
-    if (!record) return;
-
-    // Toggle display of the breakdown row
-    if (breakdownRow.style.display === 'table-row') {
-        breakdownRow.style.display = 'none';
-        buttonElement.classList.remove('active');
-        return;
-    }
-
-    // Hide any other open breakdown rows
-    document.querySelectorAll('.fee-breakdown-row').forEach(row => {
-        if (row.id !== `breakdown-row-${loanNo}`) {
-            row.style.display = 'none';
+        // Determine the relevant section and fee calculation
+        if (is138Advocate && isSec9Advocate) {
+             // If advocate is associated with both, calculate combined net fee for display
+             netFee = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields) +
+                      calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+             section = '138 & 09';
+             // CRITICAL: For editing, default to 138 if both apply, as this is often the primary action.
+             paymentField = '138 Payment'; 
+        } else if (is138Advocate) {
+            netFee = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+            paymentField = '138 Payment';
+            section = 'Sec. 138';
+        } else if (isSec9Advocate) {
+            netFee = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+            paymentField = 'sec9 Payment';
+            section = 'Sec. 09';
         }
-    });
-    document.querySelectorAll('.breakdown-button').forEach(btn => btn.classList.remove('active'));
-
-
-    buttonElement.classList.add('active');
-    breakdownRow.style.display = 'table-row';
-    
-    const breakdownCell = breakdownRow.querySelector('td');
-    
-    let breakdownHTML = `<div class="breakdown-container">`;
-    
-    // Helper function to render a single fee section
-    const renderFeeSection = (sectionTitle, definitions, isAdvocateForSection) => {
-        if (!isAdvocateForSection) return '';
-
-        // 1. Separate fields into groups for clear display
-        const feeFields = definitions.AdvocateFeeFieldsDisplay.filter(f => !f.includes("GST") && !f.includes("TDS"));
-        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
-        const tdsFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("TDS"));
-
-        let sectionHTML = `
-            <div class="breakdown-section">
-                <h4>${sectionTitle}:</h4>
-                <div class="calc-note">
-                    <span style="color: var(--color-primary); font-weight: 700;">PAYMENT CALCULATION:</span> 
-                    (Total Fee) - (Total TDS) = Total Fee Net. **GST is listed separately and is NOT part of the Net Fee.**
-                </div>
-                <table class="fee-breakdown-table">
-        `;
-        let totalFee = 0;
-        let totalTDS = 0;
         
-        // --- 1. FEES COMPONENTS ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">FEE COMPONENTS:</td></tr>`;
-        feeFields.forEach(field => {
-            const value = parseNumber(record[field]);
-            totalFee += value;
-
-            sectionHTML += `
-                <tr>
-                    <td>${field.replace(/for Sec\..*|For Sec.*|Initial Fee|Final fee/g, "").trim() + ' Fee'}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
+        const feeDisplay = `${formatCurrency(netFee)} (${section})`;
+        // The current status fetched from the backend for the *specific* payment field
+        const currentStatus = getAdvocatePaymentStatusForTracker(record, advocateName); 
         
-        sectionHTML += `
-            <tr class="section-fees-total">
-                <td style="font-weight: 700;">TOTAL FEE (EXCLUDING GST & TDS):</td>
-                <td class="right-align" style="font-weight: 700;">${formatCurrency(totalFee)}</td>
+        // COLUMN 5: The cell for the currently recorded status (Static display near Fee Net)
+        const currentStatusTag = `<span class="status-tag ${getStatusClassName(currentStatus)}">${currentStatus}</span>`;
+
+        // COLUMN 6: The cell for the editable status (Dropdown/Edit Button)
+        // CRITICAL: We pass the paymentField to the editable cell's data attribute and the edit icon.
+        const editableCellHtml = revertToTag(null, currentStatus, loanNo, advocateName);
+
+        tableHtml += `
+            <tr data-loan-no="${loanNo}">
+                <td>${loanNo}</td>
+                <td>${customerName}</td>
+                <td>${loanDate}</td>
+                <td>${feeDisplay}</td>
+                <td>${currentStatusTag}</td>
+                <td class="status-cell" data-payment-field="${paymentField}">${editableCellHtml}</td>
             </tr>
-            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
         `;
-
-        // --- 2. TDS DEDUCTIONS (Split-up) ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">TDS DEDUCTIONS:</td></tr>`;
-        tdsFields.forEach(field => {
-            const value = parseNumber(record[field]);
-            totalTDS += value;
-
-            sectionHTML += `
-                <tr class="deduction">
-                    <td>(-) Less ${field}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
-        
-        // --- 3. NET TOTAL ---
-        const totalNet = totalFee - totalTDS;
-
-        sectionHTML += `
-            <tr class="section-net-total">
-                <td style="font-weight: 900;">TOTAL FEE NET (Fees - TDS)</td>
-                <td class="right-align" style="font-weight: 900;">${formatCurrency(totalNet)}</td>
-            </tr>
-            <tr><td colspan="2" style="padding-top: 10px; border-top: 1px solid #ddd;"></td></tr>
-        `;
-
-        // --- 4. GST (Listed separately for non-confusion) ---
-        sectionHTML += `<tr><td colspan="2" style="font-weight: 700; background-color: #f0f0f0; padding-top: 8px; padding-bottom: 8px;">GST COMPONENTS (NOT included in Net Fee):</td></tr>`;
-        gstFields.forEach(field => {
-            const value = parseNumber(record[field]);
-            sectionHTML += `
-                <tr class="gst-row">
-                    <td>${field}</td>
-                    <td class="right-align">${formatCurrency(value)}</td>
-                </tr>
-            `;
-        });
-        
-        sectionHTML += `</table></div>`;
-        return sectionHTML;
-    };
-    
-    // --- SEC 138 FEES ---
-    const isAdvocate138 = String(record["ADVOCATE"] || '').trim() === advocateName;
-    breakdownHTML += renderFeeSection("Section 138 Fees & Charges", CHARGE_DEFINITIONS_138, isAdvocate138);
-
-    // --- SEC 09 FEES ---
-    const isAdvocate09 = String(record["Sec/9 Advocate"] || '').trim() === advocateName;
-    breakdownHTML += renderFeeSection("Section 09 Fees & Charges", CHARGE_DEFINITIONS_09, isAdvocate09);
-
-    breakdownHTML += `</div>`;
-    breakdownCell.innerHTML = breakdownHTML;
-}
-
-
-// ====================================================================
-// 5. LOAN DETAILS DISPLAY LOGIC
-// ====================================================================
-
-BRANCH_SELECT.addEventListener('change', populateLoanDropdown);
-LOAN_SELECT.addEventListener('change', () => {
-    SEARCH_BUTTON.disabled = !LOAN_SELECT.value;
-    LOADING_STATUS.textContent = 'Click "Display Loan Data"';
-});
-
-function populateLoanDropdown() {
-    const selectedBranch = BRANCH_SELECT.value;
-    LOAN_SELECT.innerHTML = '<option value="" selected disabled>-- Select Loan No --</option>';
-    LOAN_SELECT.disabled = true;
-    SEARCH_BUTTON.disabled = true;
-
-    if (!selectedBranch) {
-        return;
-    }
-
-    const loans = ALL_RECORDS
-        .filter(record => String(record["Loan Branch"] || '').trim() === selectedBranch)
-        .map(record => String(record["Loan No"] || '').trim());
-
-    const uniqueLoans = new Set(loans);
-
-    [...uniqueLoans].sort().forEach(loanNo => {
-        const option = document.createElement('option');
-        option.value = loanNo;
-        option.textContent = loanNo;
-        LOAN_SELECT.appendChild(option);
     });
 
-    LOAN_SELECT.disabled = false;
-    LOADING_STATUS.textContent = `Loan Nos loaded. Select one.`;
+    tableHtml += `</tbody></table>`;
+    ADVOCATE_PAYMENTS_TABLE_CONTAINER.innerHTML = tableHtml;
+
+    // Re-attach listeners for the new Edit icons
+    ADVOCATE_PAYMENTS_TABLE_CONTAINER.querySelectorAll('.edit-icon').forEach(icon => {
+        icon.addEventListener('click', function() { 
+            showPasscodePopup(this); 
+        });
+    });
 }
 
-SEARCH_BUTTON.addEventListener('click', displayLoan);
+// Event listener for the Advocate Tracker dropdown (Hooking up the logic)
+ADVOCATE_TRACKER_SELECT.addEventListener('change', handleAdvocateSelectChange);
 
-function displayLoan() {
-    const loanNo = LOAN_SELECT.value;
-    const selectedBranch = BRANCH_SELECT.value;
-    if (!loanNo || !selectedBranch) {
-        LOADING_STATUS.textContent = 'Please select both a Branch and a Loan No.';
+function handleAdvocateSelectChange() {
+    const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+    
+    if (!selectedAdvocate) {
+        ADVOCATE_TRACKER_INITIAL_MESSAGE.style.display = 'block';
+        ADVOCATE_PAYMENTS_TABLE_CONTAINER.innerHTML = '';
+        if (ADVOCATE_PAYMENT_SNAPSHOT_BOX) ADVOCATE_PAYMENT_SNAPSHOT_BOX.style.display = 'none';
         return;
     }
-
-    LOADING_STATUS.textContent = `Displaying data for Loan No: ${loanNo}...`;
-
-    const record = ALL_RECORDS.find(r => 
-        String(r["Loan Branch"] || '').trim() === selectedBranch && 
-        String(r["Loan No"] || '').trim() === loanNo 
-    );
-
-    DATA_VIEW_SECTION.style.display = 'block';
-    NOT_FOUND_MESSAGE.style.display = 'none';
-
-    if (record) {
-        window.CURRENT_LOAN_RECORD = record;
-        renderSnapshot(record);
-        
-        // FIX: Ensure Sections 5 and 6 are displayed by setting the toggle state before rendering.
-        ADVOCATE_FEE_TOGGLE.checked = true; // Set to true to show detailed blocks by default
-        
-        renderFilteredBlocks(record, ADVOCATE_FEE_TOGGLE.checked);
-        
-        ADVOCATE_FEE_CONTROLS.style.display = 'flex';
-        addAccordionListeners();
-        LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
+    
+    const filteredRecords = ALL_RECORDS.filter(record => {
+        const is138Advocate = String(record['ADVOCATE']).trim() === selectedAdvocate;
+        const isSec9Advocate = String(record['Sec/9 Advocate']).trim() === selectedAdvocate;
+        return is138Advocate || isSec9Advocate;
+    });
+    
+    if (filteredRecords.length > 0) {
+        displayAdvocatePaymentSummary(filteredRecords, selectedAdvocate);
     } else {
-        DATA_BLOCKS_CONTAINER.innerHTML = '';
-        SNAPSHOT_BOX.innerHTML = '';
-        NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
-        NOT_FOUND_MESSAGE.style.display = 'block';
-        LOADING_STATUS.textContent = 'Search complete.';
-        ADVOCATE_FEE_CONTROLS.style.display = 'none';
+        ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No payment records found for Advocate: <strong>${selectedAdvocate}</strong>.</p>`;
     }
 }
-
-// Function to format and render the snapshot box
-function renderSnapshot(record) {
-    SNAPSHOT_BOX.innerHTML = '';
-
-    const getFormattedCurrency = (sheetHeader) => {
-        let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
-        const number = parseNumber(value);
-        if (isNaN(number)) return 'N/A';
-        return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    };
-
-    const rawTotalCharges = calculateTotalCharges(record);
-    const formattedTotalCharges = rawTotalCharges.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-    const snapshotItems = [
-        { header: "Loan Amount", label: "Loan Amount", value: getFormattedCurrency("Loan Amount"), class: 'success' },
-        { header: "Loan Balance", label: "Loan Balance", value: getFormattedCurrency("Loan Balance"), class: 'primary' },
-        { header: "Arrear Amount", label: "Arrear Amount", value: getFormattedCurrency("Arrear Amount"), class: 'danger' },
-        { header: "TOTAL CHARGES", label: "TOTAL CHARGES (Net of TDS)", value: formattedTotalCharges, class: 'total-color' },
-    ];
-
-    let snapshotHTML = '';
-    snapshotItems.forEach(item => {
-        snapshotHTML += `
-            <div class="snapshot-item ${item.class}">
-                <span class="label">${item.label}</span>
-                <span class="value">${item.value}</span>
-            </div>
-        `;
-    });
-    SNAPSHOT_BOX.innerHTML = snapshotHTML;
-}
-
-// Helper to render an individual data item
-function renderDataItem(sheetHeader, displayName, value) {
-    const item = document.createElement('div');
-    item.className = 'data-block-item';
-
-    const label = document.createElement('span');
-    label.className = 'item-label';
-    label.textContent = `${displayName}:`;
-
-    const dataValue = document.createElement('span');
-    dataValue.className = 'item-value';
-    dataValue.innerHTML = value; // Use innerHTML for formatted currency spans
-
-    if (CRITICAL_FIELDS.includes(sheetHeader)) {
-        dataValue.classList.add('critical-value');
-    }
-
-    item.appendChild(label);
-    item.appendChild(dataValue);
-    return item;
-}
-
-// Helper to process and format value
-function processValue(record, sheetHeader) {
-    let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
-
-    if (DATE_FIELDS.includes(sheetHeader)) {
-        return formatDate(value);
-    }
-
-    // Check if the value should be formatted as currency
-    if (sheetHeader.includes("Amount") || sheetHeader.includes("Balance") || sheetHeader.includes("Fee") || sheetHeader.includes("Expense") || sheetHeader.includes("Charges") || sheetHeader.includes("Amt") || sheetHeader.includes("TDS") || sheetHeader.includes("GST") || sheetHeader.includes("Paid") || sheetHeader.includes("EMI")) {
-        if (value === 'N/A' || value === '' || parseNumber(value) === 0) {
-             return 'N/A';
-        }
-        
-        const number = parseNumber(value);
-        let displayClass = '';
-        if (sheetHeader.includes("TDS")) {
-            displayClass = 'minus-value'; // Highlight TDS as deduction
-        } else if (sheetHeader.includes("GST")) {
-            displayClass = 'gst-value'; // Highlight GST separately
-        }
-
-        return `<span class="${displayClass}">${formatCurrency(number)}</span>`;
-    }
-    
-    return String(value);
-}
-
-// Helper to render a group of fields
-function renderFieldGroup(record, fields, container) {
-    for (const sheetHeader in fields) {
-        const displayName = fields[sheetHeader];
-        const processedValue = processValue(record, sheetHeader);
-        
-        // Pass the already formatted HTML/String to the renderDataItem helper
-        container.appendChild(renderDataItem(sheetHeader, displayName, processedValue));
-    }
-}
-
-// Function to render the fee/charge subtotals (Blocks 5 and 6)
-function renderSubTotals(record, container, definitions, blockTitle) {
-    const isSec138 = blockTitle.includes("138");
-
-    // Advocate Fee Net (Fees - TDS, ignoring GST)
-    const advocateFeeNet = calculateAdvocateFeePaymentNet(record, definitions.AdvocateFeeNetFields);
-    // Other Charges Net (Charges - TDS, if any)
-    const otherChargesNet = calculateChargesNet(record, definitions.OtherChargesFields);
-    const blockTotalNet = advocateFeeNet + otherChargesNet;
-
-    // Advocate Fee Net
-    let advocateFeeNetRow = document.createElement('div');
-    advocateFeeNetRow.className = 'data-block-item subtotal-row advocate-fee-net';
-    advocateFeeNetRow.innerHTML = `
-        <span class="item-label">Advocate Fee Net (${isSec138 ? '138' : '09'}) (Fees - TDS):</span>
-        <span class="item-value">${formatCurrency(advocateFeeNet)}</span>
-    `;
-    container.appendChild(advocateFeeNetRow);
-
-    // Other Charges Net
-    let otherChargesNetRow = document.createElement('div');
-    otherChargesNetRow.className = 'data-block-item subtotal-row other-charges-net';
-    otherChargesNetRow.innerHTML = `
-        <span class="item-label">Other Charges Net (${isSec138 ? '138' : '09'}):</span>
-        <span class="item-value">${formatCurrency(otherChargesNet)}</span>
-    `;
-    container.appendChild(otherChargesNetRow);
-
-    // Block Total
-    let blockTotalNetRow = document.createElement('div');
-    blockTotalNetRow.className = 'data-block-item subtotal-row block-total-net';
-    blockTotalNetRow.innerHTML = `
-        <span class="item-label">TOTAL CHARGES THIS SECTION (NET):</span>
-        <span class="item-value">${formatCurrency(blockTotalNet)}</span>
-    `;
-    container.appendChild(blockTotalNetRow);
-}
-
-
-// Main rendering function that respects the toggle and adds 4-column styles
-function renderFilteredBlocks(record, showDetailedFees) {
-    DATA_BLOCKS_CONTAINER.innerHTML = '';
-
-    DISPLAY_BLOCKS.forEach((block, index) => {
-        const isFeeBlock = index === 4 || index === 5;
-        
-        // Keep Fee Blocks (5 & 6) visible only if the toggle is checked
-        if (isFeeBlock && !showDetailedFees) {
-            return;
-        }
-
-        const blockElement = document.createElement('div');
-        blockElement.className = 'data-block';
-        
-        // Blocks 1, 3, 5, 6 require 4-column layout (index 0, 2, 4, 5)
-        const isFourColumn = index === 0 || index === 2 || index === 4 || index === 5;
-
-        const header = document.createElement('div');
-        header.className = 'block-header accordion-header';
-        header.innerHTML = `<h3>${block.title}</h3><span class="accordion-icon">▶</span>`;
-
-        const contentWrapper = document.createElement('div');
-        // All blocks start collapsed by default
-        contentWrapper.className = `data-block-content-wrapper accordion-content`; 
-        
-        const content = document.createElement('div');
-        content.className = `data-block-content ${isFourColumn ? 'four-column' : ''}`;
-        
-        renderFieldGroup(record, block.fields, content);
-
-        if (isFeeBlock) {
-            const definitions = index === 4 ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09;
-            renderSubTotals(record, content, definitions, block.title);
-        }
-
-        contentWrapper.appendChild(content);
-        blockElement.appendChild(header);
-        blockElement.appendChild(contentWrapper);
-        DATA_BLOCKS_CONTAINER.appendChild(blockElement);
-    });
-}
-
-// ACCORDION LOGIC
-function addAccordionListeners() {
-    document.querySelectorAll('.accordion-header').forEach(header => {
-        header.removeEventListener('click', toggleAccordion);
-        header.addEventListener('click', toggleAccordion);
-    });
-}
-
-function toggleAccordion(event) {
-    const header = event.currentTarget;
-    const contentWrapper = header.nextElementSibling;
-    
-    header.classList.toggle('expanded');
-    contentWrapper.classList.toggle('expanded');
-
-    // Update the icon
-    const icon = header.querySelector('.accordion-icon');
-    if (header.classList.contains('expanded')) {
-        icon.textContent = '▼';
-    } else {
-        icon.textContent = '▶';
-    }
-}
-
-// Toggle functionality for Blocks 5 & 6
-ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
-    if (window.CURRENT_LOAN_RECORD) {
-        renderFilteredBlocks(window.CURRENT_LOAN_RECORD, ADVOCATE_FEE_TOGGLE.checked);
-        addAccordionListeners();
-    }
-});
 
 
 // ====================================================================
-// 6. WRITE OPERATION (General Data Update)
+// 5. WRITE OPERATION: Handles form submission (Existing code)
 // ====================================================================
 
+// Add Loan No. field to the form submission logic for identification
 FORM.addEventListener('submit', async function(event) {
     event.preventDefault();
-    MESSAGE_ELEMENT.textContent = 'Submitting...';
-
-    const keyToSubmit = AUTH_KEY_INPUT.value;
-    const headerName = HEADER_INPUT.value.trim();
-    const dataValue = DATA_INPUT.value;
     
-    if (!keyToSubmit || !headerName || !dataValue) {
-        MESSAGE_ELEMENT.textContent = '❌ Error: All fields are required.';
+    const headerName = HEADER_INPUT.value.trim();
+    const dataValue = DATA_INPUT.value.trim();
+    const loanNo = LOAN_SELECT.value;
+
+    if (!window.CURRENT_LOAN_RECORD || !loanNo) {
+        MESSAGE_ELEMENT.textContent = '❌ Error: Please select a loan first.';
         return;
     }
 
-    if (!LOAN_SELECT.value) {
-        // CRITICAL CHECK: Ensure a loan is selected before trying to save
-        MESSAGE_ELEMENT.textContent = '❌ Error: Please select a Loan No. first.';
+    MESSAGE_ELEMENT.textContent = 'Submitting data...';
+    
+    // IMPORTANT: Check if the user is trying to overwrite a critical field.
+    if (['Loan No', 'ADVOCATE', 'Sec/9 Advocate', 'Loan Branch'].includes(headerName)) {
+        MESSAGE_ELEMENT.textContent = '❌ Critical Error: Cannot overwrite core fields like Loan No, ADVOCATE, etc.';
         return;
     }
 
-    const dataToSend = {};
-dataToSend[headerName] = dataValue; 
-dataToSend["Loan No"] = LOAN_SELECT.value; // Loan No for row targeting
-dataToSend["ADVOCATE_ID"] = ADVOCATE_TRACKER_SELECT.value; // CRITICAL ADDITION: Advocate's Name for unique row targeting
-dataToSend["authKey"] = keyToSubmit; 
+    // Prepare the data payload for the server
+    const requestBody = {
+        authKey: AUTH_KEY_INPUT.value, // Send the user-entered password for server side check
+        "Loan No": loanNo,
+        [headerName]: dataValue // Dynamic column update
+    };
 
     try {
         const response = await fetch(API_URL, {
             method: 'POST',
-            mode: 'cors', 
-            headers: {
-                'Content-Type': 'application/json',
-            },
-            body: JSON.stringify(dataToSend)
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(requestBody)
         });
 
         const result = await response.json();
@@ -1437,7 +1014,7 @@ dataToSend["authKey"] = keyToSubmit;
 
 
 // ====================================================================
-// 7. TOGGLE WRITE FORM (Helper for input button)
+// 6. TOGGLE WRITE FORM (Helper for input button)
 // ====================================================================
 
 function showInputForm() {
