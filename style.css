@@ -347,7 +347,10 @@ select:focus, input:focus {
     color: var(--color-secondary);
     font-size: 1.1em;
     font-weight: 700;
+    border-bottom: 1px solid #e0e0e0;
+    padding-bottom: 5px;
 }
+
 
 /* FEE BREAKDOWN TABLE STYLING (CRISP & LEAN) */
 .fee-breakdown-table {
@@ -362,43 +365,31 @@ select:focus, input:focus {
     border: none;
 }
 .fee-breakdown-table .group-header {
-    background-color: #e9eef5;
+    /* Removed: Background and border for the 'ADVOCATE FEES' header which is now removed */
+    background-color: transparent;
     color: var(--color-secondary);
     font-weight: 600;
     padding: 8px 0;
     margin-top: 10px;
-    border-top: 1px solid #ddd;
+    border-top: none;
 }
 .fee-breakdown-table .group-header.gst-header {
-    background-color: #fcfcfc;
+    background-color: transparent;
     color: #6d4c41; /* Brown for GST */
+    font-size: 1.0em;
+    font-weight: 700;
+    padding-top: 15px;
 }
 
-/* Net Fee Only Total */
+/* Net Fee Only Total (Now acts as the final total) */
 .section-net-total-fee-only td {
-    border-top: 1px solid #bbb;
+    border-top: 2px solid var(--color-primary); /* Primary color line for net total */
     padding-top: 8px;
     font-weight: 700;
     color: var(--color-primary);
-}
-
-/* Grand Total (Block) */
-.section-grand-total td {
-    border-top: 3px double var(--color-secondary) !important;
-    padding-top: 10px !important;
     font-size: 1.05em;
-    font-weight: 700 !important;
-    color: #c67600; /* Darker accent */
 }
-
-.calc-note {
-    font-size: 0.85em;
-    color: #555;
-    margin-bottom: 10px;
-    padding: 5px 10px;
-    border-left: 3px solid var(--color-accent);
-    background-color: #fff9e6;
-}
+/* No need for a separate section-grand-total since section-net-total-fee-only acts as it */
 
 .deduction {
     color: var(--color-danger); 
@@ -428,7 +419,7 @@ select:focus, input:focus {
     color: #6d4c41;
 }
 
-/* --- 6. WRITE FORM STYLES --- */
+/* --- 6. WRITE FORM STYLES (Unchanged) --- */
 #record-form {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
@@ -471,6 +462,25 @@ select:focus, input:focus {
     margin: 10px 0 0 0;
     font-weight: 600;
     color: var(--color-primary);
+}
+
+/* --- New CSS for Auth Controls (for cleaner home page) --- */
+#auth-controls {
+    display: flex;
+    align-items: flex-end;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+#auth-controls label {
+    margin-right: auto;
+    font-weight: 600;
+}
+#auth-controls input {
+    width: 200px;
+    flex-shrink: 0;
+}
+#auth-controls button {
+    flex-shrink: 0;
 }
 
 /* --- 7. RESPONSIVENESS --- */
@@ -520,6 +530,17 @@ select:focus, input:focus {
     }
     #dynamic-field {
         grid-template-columns: 1fr;
+    }
+    #auth-controls {
+        flex-direction: column;
+        align-items: stretch;
+    }
+    #auth-controls input, #auth-controls button {
+        width: 100%;
+    }
+    #auth-controls label {
+        margin-right: 0;
+        margin-bottom: 5px;
     }
     
     .advocate-summary-table thead {
