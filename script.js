@@ -447,6 +447,12 @@ async function initialLoad() {
 
             LOADING_STATUS.textContent = `Data loaded successfully. Total records: ${ALL_RECORDS.length}`;
             LOADING_STATUS.style.color = 'var(--color-success)';
+            
+            // IMPORTANT: If an advocate was selected before the reload, re-display the tracker
+            if (ADVOCATE_TRACKER_SELECT.value) {
+                handleAdvocateSelectChange();
+            }
+
         } else {
             LOADING_STATUS.textContent = `❌ Error fetching data: ${result.message}`;
             LOADING_STATUS.style.color = 'var(--color-danger)';
@@ -785,6 +791,9 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
         [paymentField]: newStatus // The actual field to update: '138 Payment' or 'sec9 Payment'
     };
     
+    // Store selected advocate before reloading, in case the dropdown is cleared
+    const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
+
     try {
         // Assuming API_URL is used for POST requests to your Netlify function (or similar backend)
         const response = await fetch(API_URL, {
@@ -799,10 +808,7 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
 
         if (result.status === 'success') {
             
-            // 1. Provide IMEDIATE visual success feedback
-            updateMessage.textContent = '✅ Saved! Refreshing table...';
-            
-            // 2. Update the local ALL_RECORDS object (Crucial for the refresh)
+            // 1. Update the local ALL_RECORDS object (Crucial for the next fetch)
             const recordToUpdate = ALL_RECORDS.find(r => 
                 String(r['Loan No']).trim() === String(loanNo).trim()
             );
@@ -812,15 +818,23 @@ async function submitStatusUpdate(formElement, newStatus, loanNo, advocateName, 
                 recordToUpdate[paymentField] = newStatus;
             }
 
-            // 3. Re-render the Advocate Payments View to reflect the change IMMEDIATELY
-            const selectedAdvocate = ADVOCATE_TRACKER_SELECT.value;
-            const filteredRecords = ALL_RECORDS.filter(record => 
-                String(record['ADVOCATE']).trim() === selectedAdvocate || 
-                String(record['Sec/9 Advocate']).trim() === selectedAdvocate
-            );
-            
-            // REMOVED setTimeout: Call display immediately for instant update
-            displayAdvocatePaymentSummary(filteredRecords, selectedAdvocate); 
+            // --- FIX A: Immediate Visual Update (More Efficient) ---
+            revertToTag(tdElement, newStatus, loanNo, advocateName, paymentField);
+            // Show a quick success message at the top of the table
+            const tableContainer = document.getElementById('advocate-payments-view');
+            let successMsg = document.createElement('p');
+            successMsg.textContent = `✅ Status for Loan ${loanNo} saved as ${newStatus}.`;
+            successMsg.className = 'success-message';
+            tableContainer.prepend(successMsg);
+            setTimeout(() => successMsg.remove(), 3000); 
+
+            // --- FIX B: Force Data Sync with Backend (Persistence) ---
+            // If the user's report is true, the data is not persisting on the backend
+            // Forcing a full reload (which re-fetches all data) is the only way to confirm persistence.
+            // Re-select the advocate after the full reload to show the updated table
+            await initialLoad(); 
+            ADVOCATE_TRACKER_SELECT.value = selectedAdvocate;
+            handleAdvocateSelectChange(); 
 
         } else {
             updateMessage.textContent = `❌ Error: ${result.message || 'Server error'}`;
