@@ -161,17 +161,6 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
     return totalNet;
 }
 
-/**
- * CORE LOGIC for Snapshot Box: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
- * This is used for the main snapshot box and includes ALL fees (Fees - TDS) for ALL advocates.
- */
-function calculateTotalAdvocateFeeNet(record) {
-    const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-    const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-    // This correctly excludes other charges and sums both sections.
-    return feeNet138 + feeNet09;
-}
-
 
 // --- CHARGE FIELD DEFINITIONS FOR BLOCKS 5 & 6 ---
 // Map Sheet Headers to a cleaner, more professional display name
@@ -252,7 +241,6 @@ const CHARGE_DEFINITIONS_09 = {
 
 // --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
-// ... (DISPLAY_BLOCKS remains unchanged, omitted for brevity)
     {
         title: "1) Customer & Loan Details",
         fields: {
@@ -361,7 +349,7 @@ const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box');
+// const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box'); // REMOVED
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
@@ -1018,7 +1006,7 @@ function displayLoan() {
 
     if (record) {
         window.CURRENT_LOAN_RECORD = record;
-        renderSnapshot(record);
+        // renderSnapshot(record); // REMOVED
         
         // FIX: Ensure Sections 5 and 6 are displayed by setting the toggle state before rendering.
         ADVOCATE_FEE_TOGGLE.checked = true; // Set to true to show detailed blocks by default
@@ -1030,7 +1018,7 @@ function displayLoan() {
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
-        SNAPSHOT_BOX.innerHTML = '';
+        // SNAPSHOT_BOX.innerHTML = ''; // REMOVED
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
@@ -1038,40 +1026,6 @@ function displayLoan() {
     }
 }
 
-// Function to format and render the snapshot box (MODIFIED for Advocate Fee Net)
-function renderSnapshot(record) {
-    SNAPSHOT_BOX.innerHTML = '';
-
-    const getFormattedCurrency = (sheetHeader) => {
-        let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 0;
-        const number = parseNumber(value);
-        if (isNaN(number)) return 'N/A';
-        return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-    };
-
-    // CRITICAL FIX: Use calculateTotalAdvocateFeeNet which sums (Fees - TDS) for ALL sections/advocates, 
-    // excluding all other charges. This fulfills the snapshot requirement.
-    const rawTotalAdvocateFeeNet = calculateTotalAdvocateFeeNet(record);
-    const formattedTotalAdvocateFeeNet = rawTotalAdvocateFeeNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
-
-    const snapshotItems = [
-        { header: "Loan Amount", label: "Loan Amount", value: getFormattedCurrency("Loan Amount"), class: 'success' },
-        { header: "Loan Balance", label: "Loan Balance", value: getFormattedCurrency("Loan Balance"), class: 'primary' },
-        { header: "Arrear Amount", label: "Arrear Amount", value: getFormattedCurrency("Arrear Amount"), class: 'danger' },
-        { header: "TOTAL ADVOCATE FEE NET", label: "TOTAL ADVOCATE FEE NET (Fees - TDS)", value: formattedTotalAdvocateFeeNet, class: 'total-color' },
-    ];
-
-    let snapshotHTML = '';
-    snapshotItems.forEach(item => {
-        snapshotHTML += `
-            <div class="snapshot-item ${item.class}">
-                <span class="label">${item.label}</span>
-                <span class="value">${item.value}</span>
-            </div>
-        `;
-    });
-    SNAPSHOT_BOX.innerHTML = snapshotHTML;
-}
 
 // Helper to process and format value
 function processValue(record, sheetHeader) {
