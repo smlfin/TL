@@ -162,13 +162,38 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 }
 
 /**
- * NEW HELPER: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
- * This is used for the main snapshot box and the tracker's total net column.
+ * Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
+ * This is used ONLY for the main snapshot box (total fees owed across all advocates).
  */
 function calculateTotalAdvocateFeeNet(record) {
     const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
     const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
     return feeNet138 + feeNet09;
+}
+
+/**
+ * NEW CRITICAL HELPER: Calculates the total ADVOCATE FEE NET relevant to the selected advocate for this specific loan.
+ * This is used for the tracker's total net column and the matching breakdown total.
+ * @param {object} record - The loan record.
+ * @param {string} selectedAdvocate - The advocate selected in the dropdown.
+ * @returns {number} The net fee (Fees - TDS) for the sections the advocate handles for this loan.
+ */
+function calculateNetFeeForSelectedAdvocate(record, selectedAdvocate) {
+    let netFee = 0;
+    const normalizedAdvocate = String(selectedAdvocate).trim();
+
+    // 1. Check if the advocate is the primary 'ADVOCATE' (Sec 138)
+    if (String(record['ADVOCATE'] || '').trim() === normalizedAdvocate) {
+        netFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+    } 
+    
+    // 2. Check if the advocate is the secondary 'Sec/9 Advocate'
+    // Note: An advocate can be both (handling both sections), so we use '+' and don't use 'else if'.
+    if (String(record['Sec/9 Advocate'] || '').trim() === normalizedAdvocate) {
+        netFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    }
+    
+    return netFee;
 }
 
 
@@ -466,15 +491,16 @@ function getStatusClassName(status) {
 }
 
 /**
- * Helper to retrieve the total fee net from the record.
+ * Helper to retrieve the total fee net from the record relevant to the selected advocate.
  * Used for the table's Total Fee Net column display.
+ * * FIX: Now takes selectedAdvocate and uses the new specific calculation helper.
  */
-function getRecordFeeNet(loanNo) {
+function getRecordFeeNet(loanNo, selectedAdvocate) {
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
-    if (!record) return 0;
+    if (!record || !selectedAdvocate) return 0;
     
-    // Uses the dedicated helper function for combined net calculation
-    return calculateTotalAdvocateFeeNet(record);
+    // Use the dedicated helper function for selected advocate net calculation
+    return calculateNetFeeForSelectedAdvocate(record, selectedAdvocate);
 }
 
 
@@ -503,10 +529,11 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
 /**
  * Function to reconstruct the entire combined status/fee <td> content.
  * Used for initial rendering, and for reverting/confirming status changes.
+ * * FIX: Now takes selectedAdvocate and passes it to getRecordFeeNet.
  */
 function revertToCombinedCell(tdElement, newStatus, loanNo, advocateName) {
     // CRITICAL: Ensure this is the correct Net Fee calculation
-    const totalFeeNet = getRecordFeeNet(loanNo);
+    const totalFeeNet = getRecordFeeNet(loanNo, advocateName);
     const statusTagHTML = revertToTag(null, newStatus, loanNo, advocateName);
 
     const htmlContent = `
@@ -623,7 +650,8 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
         const newStatus = select.value;
 
         try {
-            await confirmSaveStatus(loanNo, newStatus, tdElement); // pass DOM tdElement
+            // Pass the current advocate name to the save function
+            await confirmSaveStatus(loanNo, newStatus, tdElement, advocateName); 
         } catch (err) {
             console.error('Unexpected error in save click:', err);
             // Revert on failure
@@ -652,14 +680,11 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
 }
 
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
-// MODIFICATION: Uses revertToCombinedCell to restore the full cell structure.
-async function confirmSaveStatus(loanNo, newStatus, tdElement) {
+// MODIFICATION: Accepts advocateName to correctly determine the column to update.
+async function confirmSaveStatus(loanNo, newStatus, tdElement, currentAdvocate) {
     const sel = tdElement.querySelector('.status-select');
     const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
     
-    // Get advocate name from the global filtering dropdown
-    const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
-
     if (!newStatus || newStatus === originalStatus) {
         revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
@@ -671,17 +696,18 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     
     if (record) {
         const normalizedAdvocate = currentAdvocate.trim();
-        // 1. If the current advocate is the primary 'ADVOCATE' (BO), use '138 Payment'
+        // 1. If the current advocate is the primary 'ADVOCATE' (Sec 138), use '138 Payment'
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment'; // <-- FIX: Use actual BO column header
+            targetColumn = '138 Payment'; 
         } 
-        // 2. If the current advocate is the secondary 'Sec/9 Advocate' (BP), use 'sec9 Payment'
+        // 2. If the current advocate is the secondary 'Sec/9 Advocate' (Sec 09), use 'sec9 Payment'
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment'; // <-- FIX: Use actual BP column header
+            targetColumn = 'sec9 Payment'; 
         }
     }
 
     if (!targetColumn) {
+        // Use originalStatus and currentAdvocate to revert the cell
         revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         alert("Error: Cannot determine the correct payment column. Update aborted.");
         return;
@@ -766,8 +792,8 @@ function displayAdvocateSummary(selectedAdvocate) {
         // Use the helper to get the status relevant to the current advocate/section
         const statusValue = getAdvocatePaymentStatusForTracker(record, selectedAdvocate);
 
-        // Get the combined total net fee for all sections (Sec 138 + Sec 09)
-        const totalFeeNet = getRecordFeeNet(loanNo); 
+        // FIX: Pass selectedAdvocate to getRecordFeeNet to calculate only relevant fees
+        const totalFeeNet = getRecordFeeNet(loanNo, selectedAdvocate); 
         grandTotalNet += totalFeeNet;
 
         const sections = [];
@@ -803,7 +829,7 @@ function displayAdvocateSummary(selectedAdvocate) {
 }
 
 // ====================================================================
-// 5. FEE BREAKDOWN POPUP LOGIC (ADDED to fix inconsistency)
+// 5. FEE BREAKDOWN POPUP LOGIC (FIXED for consistency)
 // ====================================================================
 
 /**
@@ -818,10 +844,12 @@ function hideFeeBreakdown(breakdownRow) {
 
 /**
  * Generates and displays the fee breakdown for a specific loan.
- * CRITICAL FIX: Ensures the final TOTAL FEE NET calculation is consistent.
+ * CRITICAL FIX: Ensures the final TOTAL FEE NET calculation is consistent and only shows
+ * relevant sections for the selected advocate.
  */
 function showFeeBreakdown(buttonElement) {
     const loanNo = buttonElement.dataset.loanNo;
+    const selectedAdvocate = buttonElement.dataset.advocate; // Get advocate name from the button
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
     const breakdownRow = document.getElementById(`breakdown-row-${loanNo}`);
     const breakdownCell = breakdownRow.querySelector('td');
@@ -836,67 +864,75 @@ function showFeeBreakdown(buttonElement) {
          hideFeeBreakdown(breakdownRow);
          return;
     }
-
+    
+    // Determine which sections the selected advocate handles for this loan
+    const isSec138Advocate = String(record['ADVOCATE'] || '').trim() === selectedAdvocate.trim();
+    const isSec09Advocate = String(record['Sec/9 Advocate'] || '').trim() === selectedAdvocate.trim();
 
     // --- Start HTML Generation for Breakdown ---
     let breakdownHTML = `
         <div class="fee-breakdown-content">
-            <h3>Fee & Charges Breakdown for Loan No: ${loanNo}</h3>
-            
-            <div class="breakdown-section" id="breakdown-sec-138">
-                <h4>Section 138 Advocate Fees & Charges (Advocate: ${record['ADVOCATE'] || 'N/A'})</h4>
-                <div class="data-block-content four-column">
+            <h3>Fee & Charges Breakdown for Loan No: ${loanNo} (Advocate: ${selectedAdvocate})</h3>
     `;
 
-    // 1. Calculate and display 138 Advocate Fees
-    let sec138FeeTotal = 0;
-    CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay.forEach(field => {
-        const value = parseNumber(record[field]);
-        const displayValue = formatCurrency(value);
-        const displayName = FEE_FIELD_MAP[field] || field;
-        const className = field.includes("TDS") ? 'minus-value' : '';
-        
+    // 1. Section 138 Breakdown (Only if selected advocate is the 138 advocate)
+    if (isSec138Advocate) {
         breakdownHTML += `
-            <div class="data-label">${displayName}:</div>
-            <div class="data-value ${className}">${displayValue}</div>
+            <div class="breakdown-section" id="breakdown-sec-138">
+                <h4>Section 138 Fees & Charges</h4>
+                <div class="data-block-content four-column">
+        `;
+
+        // 1.1. Calculate and display 138 Advocate Fees
+        let sec138FeeTotal = 0;
+        CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay.forEach(field => {
+            const value = parseNumber(record[field]);
+            const displayValue = formatCurrency(value);
+            const displayName = FEE_FIELD_MAP[field] || field;
+            const className = field.includes("TDS") ? 'minus-value' : '';
+            
+            breakdownHTML += `
+                <div class="data-label">${displayName}:</div>
+                <div class="data-value ${className}">${displayValue}</div>
+            `;
+            
+            // Summing the total fees (Fees + GST - TDS) for section subtotal
+            let sign = 1;
+            if (field.includes("TDS")) sign = -1;
+            sec138FeeTotal += value * sign;
+        });
+
+        // 1.2. Display 138 Other Charges 
+        const sec138OtherChargesNet = calculateChargesNet(record, CHARGE_DEFINITIONS_138.OtherChargesFields);
+        breakdownHTML += `
+            <div class="data-label">Other Charges (Sec 138 Net):</div>
+            <div class="data-value">${formatCurrency(sec138OtherChargesNet)}</div>
+        `;
+        sec138FeeTotal += sec138OtherChargesNet;
+        
+        // 1.3. Section 138 Subtotal (Gross total)
+        breakdownHTML += `
+            <div class="data-label subtotal-row" style="font-weight: bold;">SEC 138 TOTAL (Fees + GST + Other Charges - TDS):</div>
+            <div class="data-value subtotal-row" style="font-weight: bold;">${formatCurrency(sec138FeeTotal)}</div>
+            <hr class="subtotal-separator" style="grid-column: span 2;">
         `;
         
-        // Summing the total fees (Fees + GST - TDS) for section subtotal
-        let sign = 1;
-        if (field.includes("TDS")) sign = -1;
-        sec138FeeTotal += value * sign;
-    });
+        // 1.4. Section 138 Net Fee Only (Fees - TDS, no GST, no Other Charges)
+        const sec138FeeNetOnly = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+        breakdownHTML += `
+            <div class="data-label net-row" style="font-weight: bold; color: var(--color-primary);">SEC 138 FEE NET (Fees - TDS):</div>
+            <div class="data-value net-row" style="font-weight: bold; color: var(--color-primary);">${formatCurrency(sec138FeeNetOnly)}</div>
+            <hr style="grid-column: span 2;">
+            </div>
+            </div>
+        `;
+    }
 
-    // 1.1. Display 138 Other Charges (not included in the main table net total, but in the breakdown)
-    const sec138OtherChargesNet = calculateChargesNet(record, CHARGE_DEFINITIONS_138.OtherChargesFields);
-    breakdownHTML += `
-        <div class="data-label">Other Charges (Sec 138 Net):</div>
-        <div class="data-value">${formatCurrency(sec138OtherChargesNet)}</div>
-    `;
-    sec138FeeTotal += sec138OtherChargesNet;
-    
-    // 1.2. Section 138 Subtotal
-    breakdownHTML += `
-        <div class="data-label subtotal-row" style="font-weight: bold;">SEC 138 TOTAL (Fees + GST + Other Charges - TDS):</div>
-        <div class="data-value subtotal-row" style="font-weight: bold;">${formatCurrency(sec138FeeTotal)}</div>
-        <hr class="subtotal-separator" style="grid-column: span 2;">
-    `;
-    
-    // 1.3. Section 138 Net Fee Only (Fees - TDS, no GST, no Other Charges)
-    const sec138FeeNetOnly = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-    breakdownHTML += `
-        <div class="data-label net-row" style="font-weight: bold; color: var(--color-primary);">SEC 138 FEE NET (Fees - TDS):</div>
-        <div class="data-value net-row" style="font-weight: bold; color: var(--color-primary);">${formatCurrency(sec138FeeNetOnly)}</div>
-        <hr style="grid-column: span 2;">
-        </div>
-        </div>
-    `;
-
-    // 2. Section 09 Breakdown (Only if Sec/9 Advocate is present)
-    if (record['Sec/9 Advocate']) {
+    // 2. Section 09 Breakdown (Only if selected advocate is the Sec 09 advocate)
+    if (isSec09Advocate) {
         breakdownHTML += `
             <div class="breakdown-section" id="breakdown-sec-09">
-                <h4>Section 09 Advocate Fees & Charges (Advocate: ${record['Sec/9 Advocate'] || 'N/A'})</h4>
+                <h4>Section 09 Fees & Charges</h4>
                 <div class="data-block-content four-column">
         `;
         
@@ -918,7 +954,7 @@ function showFeeBreakdown(buttonElement) {
             sec09FeeTotal += value * sign;
         });
 
-        // 2.1. Display 09 Other Charges (not included in the main table net total, but in the breakdown)
+        // 2.2. Display 09 Other Charges 
         const sec09OtherChargesNet = calculateChargesNet(record, CHARGE_DEFINITIONS_09.OtherChargesFields);
         breakdownHTML += `
             <div class="data-label">Other Charges (Sec 09 Net):</div>
@@ -926,14 +962,14 @@ function showFeeBreakdown(buttonElement) {
         `;
         sec09FeeTotal += sec09OtherChargesNet;
 
-        // 2.2. Section 09 Subtotal
+        // 2.3. Section 09 Subtotal (Gross total)
         breakdownHTML += `
             <div class="data-label subtotal-row" style="font-weight: bold;">SEC 09 TOTAL (Fees + GST + Other Charges - TDS):</div>
             <div class="data-value subtotal-row" style="font-weight: bold;">${formatCurrency(sec09FeeTotal)}</div>
             <hr class="subtotal-separator" style="grid-column: span 2;">
         `;
         
-        // 2.3. Section 09 Net Fee Only (Fees - TDS, no GST, no Other Charges)
+        // 2.4. Section 09 Net Fee Only (Fees - TDS, no GST, no Other Charges)
         const sec09FeeNetOnly = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
         breakdownHTML += `
             <div class="data-label net-row" style="font-weight: bold; color: var(--color-primary);">SEC 09 FEE NET (Fees - TDS):</div>
@@ -945,13 +981,12 @@ function showFeeBreakdown(buttonElement) {
     }
 
     // 3. FINAL TOTAL NET CALCULATION (CRITICAL FIX FOR USER ISSUE)
-    // The main table amount is calculated by getRecordFeeNet, which uses calculateTotalAdvocateFeeNet.
-    // We must use the same function here for consistency.
-    const totalFeeNetCalc = calculateTotalAdvocateFeeNet(record);
+    // This MUST use the same logic as the button text: calculateNetFeeForSelectedAdvocate
+    const totalFeeNetCalc = calculateNetFeeForSelectedAdvocate(record, selectedAdvocate);
     
     breakdownHTML += `
         <div class="final-total-section">
-            <h4 class="final-total-header">Total Advocate Fee Summary</h4>
+            <h4 class="final-total-header">Total Advocate Fee Summary for ${selectedAdvocate}</h4>
             <div class="data-block-content two-column">
                 <div class="data-label final-net-row" style="font-weight: 700;">TOTAL FEE NET (Fees - TDS):</div>
                 <div class="data-value final-net-row" id="section-net-total-fee-only" style="font-weight: 700; color: var(--color-success); font-size: 1.1em;">
@@ -976,9 +1011,6 @@ function showFeeBreakdown(buttonElement) {
 // ====================================================================
 // 6. LOAN DETAIL SEARCH LOGIC
 // ====================================================================
-
-// ... (Rest of the script.js continues from here)
-// ... (The loan detail search logic will be placed here)
 
 // Helper function to render a single data block
 function renderDataBlock(title, fields, record) {
@@ -1028,14 +1060,12 @@ function renderDataBlock(title, fields, record) {
 function renderLoanSnapshot(record) {
     const loanBalance = parseNumber(record['Loan Balance']);
     const arrearAmount = parseNumber(record['Arrear Amount']);
-    const totalAdvocateFeeNet = calculateTotalAdvocateFeeNet(record);
+    // NOTE: This intentionally shows the total fee net for *all* advocates for the overall loan summary.
+    const totalAdvocateFeeNet = calculateTotalAdvocateFeeNet(record); 
     const totalAdvocateFeeGross138 = calculateChargesNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeFieldsDisplay);
     const totalAdvocateFeeGross09 = calculateChargesNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeFieldsDisplay);
     const totalAdvocateFeeGross = totalAdvocateFeeGross138 + totalAdvocateFeeGross09;
 
-
-    // CRITICAL: Ensure fields used for snapshot are calculated correctly.
-    // The snapshot box does not need to show the full breakdown, but key figures.
 
     SNAPSHOT_BOX.innerHTML = `
         <div class="snapshot-item">
