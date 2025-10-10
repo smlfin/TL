@@ -250,10 +250,6 @@ const CHARGE_DEFINITIONS_09 = {
     ]
 };
 
-// Removed: CHARGE_FIELDS_FOR_SNAPSHOT and calculateTotalCharges 
-// (Now using calculateTotalAdvocateFeeNet for consistency)
-
-
 // --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
     {
@@ -379,10 +375,8 @@ const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view')
 // 3. DROPDOWN POPULATION & CORE LOGIC
 // ====================================================================
 
-// ... (initialLoad and helper functions unchanged)
-
 /**
- * REQUIRED FIX: Defines the function called by initialLoad.
+ * Defines the function called by initialLoad.
  */
 function populateBranchDropdown(branches) {
     BRANCH_SELECT.innerHTML = '<option value="">-- Select Branch --</option>';
@@ -395,7 +389,7 @@ function populateBranchDropdown(branches) {
 }
 
 /**
- * REQUIRED FIX: Defines the function called by initialLoad.
+ * Defines the function called by initialLoad.
  */
 function populateAdvocateDropdown(advocates) {
     ADVOCATE_TRACKER_SELECT.innerHTML = '<option value="">-- Select Advocate --</option>';
@@ -409,7 +403,6 @@ function populateAdvocateDropdown(advocates) {
 
 /**
  * CORE FUNCTION: Fetches all data and initializes the application.
- * This is now defined AFTER the functions it calls.
  */
 async function initialLoad() {
     LOADING_STATUS.textContent = 'Loading all data from server...';
@@ -452,25 +445,246 @@ async function initialLoad() {
     }
 }
 
-
 // CRITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
 
-// All other functions and event listeners should follow here:
-// ====================================================================
 
-// Function to handle loan select and populate loan details
-function handleLoanSelectChange() {
-    // ... (unchanged)
+/**
+ * Function to update the Loan No. dropdown based on filtered records.
+ * FIX: This was previously omitted.
+ */
+function updateLoanSelect(records) {
+    const loanSelect = document.getElementById('loan-select');
+    loanSelect.innerHTML = '<option value="">-- Select Loan No. --</option>';
+
+    // Get unique loan numbers, sort them, and populate the dropdown
+    const loanNos = [...new Set(records.map(record => record['Loan No']).filter(n => n))].sort();
+
+    loanNos.forEach(loanNo => {
+        const option = document.createElement('option');
+        option.value = loanNo;
+        option.textContent = loanNo;
+        loanSelect.appendChild(option);
+    });
 }
-// Event listener for Branch select (unchanged)
+
+/**
+ * Function to handle branch selection change.
+ * FIX: This was previously omitted.
+ */
+function handleBranchSelectChange() {
+    const selectedBranch = BRANCH_SELECT.value;
+    
+    // Reset data blocks and messages when branch changes
+    DATA_BLOCKS_CONTAINER.innerHTML = '';
+    SNAPSHOT_BOX.innerHTML = 'Select a Loan No. and click Search to view details.';
+    NOT_FOUND_MESSAGE.style.display = 'none';
+    
+    // Clear the loan dropdown
+    const loanSelect = document.getElementById('loan-select');
+    loanSelect.innerHTML = '<option value="">-- Select Loan No. --</option>';
+
+    if (selectedBranch) {
+        const filteredRecords = ALL_RECORDS.filter(record => 
+            String(record['Loan Branch']).trim() === selectedBranch.trim()
+        );
+        updateLoanSelect(filteredRecords);
+    }
+}
+
+
+/**
+ * Function to handle the search button click.
+ * FIX: This was previously omitted.
+ */
+function handleSearchClick() {
+    const loanNo = LOAN_SELECT.value;
+    if (!loanNo) {
+        alert("Please select a Branch and a Loan No. first.");
+        return;
+    }
+
+    const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo.trim());
+
+    if (record) {
+        window.CURRENT_LOAN_RECORD = record;
+        displayLoanDetails(record);
+        NOT_FOUND_MESSAGE.style.display = 'none';
+    } else {
+        DATA_BLOCKS_CONTAINER.innerHTML = '';
+        SNAPSHOT_BOX.innerHTML = 'Select a Loan No. and click Search to view details.';
+        NOT_FOUND_MESSAGE.textContent = `Loan No. ${loanNo} not found in the loaded data.`;
+        NOT_FOUND_MESSAGE.style.display = 'block';
+    }
+}
+
+
+/**
+ * Function to display loan details in the blocks and snapshot.
+ * FIX: This was previously omitted.
+ */
+function displayLoanDetails(record) {
+    // 1. Snapshot Box
+    let totalAdvocateFeeNet = calculateTotalAdvocateFeeNet(record);
+    
+    SNAPSHOT_BOX.innerHTML = `
+        <div class="snapshot-item">
+            <span class="label">Loan No:</span>
+            <span class="value">${record["Loan No"] || 'N/A'}</span>
+        </div>
+        <div class="snapshot-item">
+            <span class="label">Customer:</span>
+            <span class="value">${record["Customer Name"] || 'N/A'}</span>
+        </div>
+        <div class="snapshot-item critical">
+            <span class="label">Loan Balance:</span>
+            <span class="value">${formatCurrency(record["Loan Balance"])}</span>
+        </div>
+        <div class="snapshot-item critical">
+            <span class="label">Total Arrear:</span>
+            <span class="value">${formatCurrency(record["Arrear Amount"])}</span>
+        </div>
+        <div class="snapshot-item total-fee">
+            <span class="label">Total Advocate Fee Net (Fees - TDS):</span>
+            <span class="value">${formatCurrency(totalAdvocateFeeNet)}</span>
+        </div>
+    `;
+
+    // 2. Data Blocks
+    let blocksHTML = '';
+
+    DISPLAY_BLOCKS.forEach(block => {
+        blocksHTML += `
+            <div class="data-block">
+                <h3>${block.title}</h3>
+                <div class="data-block-content ${block.title.includes('Fee') ? 'four-column' : ''}">
+        `;
+
+        // Used to track subtotals for Fee blocks
+        let subtotalFees = 0;
+        let subtotalGST = 0;
+        let subtotalTDS = 0;
+        let blockNetTotal = 0;
+        let isFeeBlock = block.title.includes('Fee');
+        let feeFields = isFeeBlock ? (block.title.includes('138') ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09) : null;
+        let otherChargesNet = 0;
+
+        for (const sheetHeader in block.fields) {
+            const displayLabel = block.fields[sheetHeader];
+            let value = record[sheetHeader];
+            let rawValue = value;
+            
+            // Format dates
+            if (DATE_FIELDS.includes(sheetHeader)) {
+                value = formatDate(value);
+            }
+            
+            // Format currency fields
+            let isCurrency = !isNaN(parseNumber(value)) && !DATE_FIELDS.includes(sheetHeader) && !["Tenure", "Paid", "Arrear"].includes(sheetHeader);
+            if (isCurrency) {
+                value = formatCurrency(value);
+                rawValue = parseNumber(record[sheetHeader]); 
+            } else {
+                value = value || 'N/A';
+            }
+
+            // Calculate subtotals for Fee blocks
+            if (isFeeBlock && rawValue !== 'N/A') {
+                const numValue = parseNumber(rawValue);
+                if (sheetHeader.includes("GST")) {
+                    subtotalGST += numValue;
+                } else if (sheetHeader.includes("TDS")) {
+                    subtotalTDS += numValue;
+                } else if (sheetHeader.includes("Fee")) { // Initial Fee or Final Fee
+                    subtotalFees += numValue;
+                }
+                
+                // Calculate the block's net total for all displayed rows
+                if (sheetHeader.includes("TDS")) {
+                    blockNetTotal -= numValue;
+                } else {
+                    blockNetTotal += numValue;
+                }
+            }
+            
+            // Apply highlighting for Critical Fields
+            const fieldClass = CRITICAL_FIELDS.includes(sheetHeader) ? 'critical-field' : '';
+            
+            blocksHTML += `
+                <div class="data-item ${fieldClass}">
+                    <span class="label">${displayLabel}:</span>
+                    <span class="value">${value}</span>
+                </div>
+            `;
+        }
+
+        // Add subtotal row for Fee Blocks (Section 5 & 6)
+        if (isFeeBlock) {
+            
+            // 1. Calculate Other Charges Net (Fees and GST are already handled above)
+            otherChargesNet = calculateChargesNet(record, feeFields.OtherChargesFields);
+            
+            // 2. Add the subtotal row for Fees/GST/TDS
+            blocksHTML += `
+                <div class="subtotal-row total-section">
+                    <span class="label">TOTAL FEES + GST:</span>
+                    <span class="value">${formatCurrency(subtotalFees + subtotalGST)}</span>
+                </div>
+                <div class="subtotal-row total-section">
+                    <span class="label">TOTAL TDS:</span>
+                    <span class="value minus-value">${formatCurrency(subtotalTDS)}</span>
+                </div>
+                <div class="subtotal-row total-section">
+                    <span class="label">NET FEES (Fees + GST - TDS):</span>
+                    <span class="value">${formatCurrency(blockNetTotal)}</span>
+                </div>
+                <div class="subtotal-row empty-col"></div> 
+            `;
+            
+            // 3. Add the Other Charges Net (still included here for the detail view blocks)
+            blocksHTML += `
+                <div class="subtotal-row other-charges-total">
+                    <span class="label">Other Charges Net:</span>
+                    <span class="value">${formatCurrency(otherChargesNet)}</span>
+                </div>
+                <div class="subtotal-row empty-col"></div> 
+                <div class="subtotal-row empty-col"></div> 
+                <div class="subtotal-row empty-col"></div> 
+            `;
+            
+            // 4. Add the FINAL TOTAL (Net Fees + Other Charges Net)
+            blocksHTML += `
+                <div class="final-total-row">
+                    <span class="label">BLOCK TOTAL (Fees Net + Other Charges Net):</span>
+                    <span class="value">${formatCurrency(blockNetTotal + otherChargesNet)}</span>
+                </div>
+            `;
+        }
+
+
+        blocksHTML += `
+                </div>
+            </div>
+        `;
+    });
+
+    DATA_BLOCKS_CONTAINER.innerHTML = blocksHTML;
+}
+
+
+// Function to handle loan select and populate loan details (Placeholder, only used for event listener)
+function handleLoanSelectChange() {
+    // This function is mostly for event binding; actual detail view is via handleSearchClick
+}
+
+
+// Event listener for Branch select (now calls the defined function)
 BRANCH_SELECT.addEventListener('change', handleBranchSelectChange);
-// Event listener for Loan select (unchanged)
+// Event listener for Loan select (now calls the defined function)
 LOAN_SELECT.addEventListener('change', handleLoanSelectChange);
-// Event listener for Search button (unchanged)
+// Event listener for Search button (now calls the defined function)
 SEARCH_BUTTON.addEventListener('click', handleSearchClick);
 
-// ... (other functions: handleBranchSelectChange, handleSearchClick, displayLoanDetails, updateLoanSelect)
 
 // ====================================================================
 // 4. ADVOCATE TRACKER LOGIC
@@ -861,7 +1075,7 @@ function showFeeBreakdown(buttonElement) {
             
             html += `
                 <div class="breakdown-item">
-                    <span class="label">${displayLabel}:</span>
+                    <span class="label">**${displayLabel.includes('Fee') ? displayLabel.replace('Fee', 'Fee') : displayLabel}:**</span>
                     <span class="value ${valueClass}">${formatCurrency(value)}</span>
                 </div>
             `;
@@ -899,7 +1113,7 @@ function showFeeBreakdown(buttonElement) {
             
             html += `
                 <div class="breakdown-item">
-                    <span class="label">${displayLabel}:</span>
+                    <span class="label">**${displayLabel.includes('Fee') ? displayLabel.replace('Fee', 'Fee') : displayLabel}:**</span>
                     <span class="value ${valueClass}">${formatCurrency(value)}</span>
                 </div>
             `;
@@ -950,15 +1164,8 @@ function showFeeBreakdown(buttonElement) {
 }
 
 
-
 // ====================================================================
-// 5. DATA SEARCH & DISPLAY LOGIC (Unchanged)
-// ====================================================================
-
-// ... (Functions handleSearchClick, displayLoanDetails, updateLoanSelect, etc. are omitted for brevity, assumed unchanged from previous implementation)
-
-// ====================================================================
-// 6. DATA SUBMISSION LOGIC (Unchanged)
+// 6. DATA SUBMISSION LOGIC 
 // ====================================================================
 
 FORM.addEventListener('submit', async function(e) {
