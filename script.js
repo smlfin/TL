@@ -349,7 +349,6 @@ const LOADING_STATUS = document.getElementById('loading-status');
 const DATA_BLOCKS_CONTAINER = document.getElementById('data-blocks');
 const DATA_VIEW_SECTION = document.getElementById('data-view-blocks');
 const NOT_FOUND_MESSAGE = document.getElementById('not-found-message');
-// const SNAPSHOT_BOX = document.getElementById('loan-snapshot-box'); // REMOVED
 const HEADER_INPUT = document.getElementById('header_name'); 
 const DATA_INPUT = document.getElementById('data_value');
 const ADVOCATE_FEE_CONTROLS = document.getElementById('advocate-fee-controls');
@@ -358,6 +357,7 @@ const ADVOCATE_FEE_TOGGLE = document.getElementById('advocate-fee-toggle');
 // Elements for Advocate Tracker
 const ADVOCATE_TRACKER_SELECT = document.getElementById('advocate-tracker-select');
 const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view');
+const ADVOCATE_STATS_REPORT = document.getElementById('advocate-stats-report'); // <-- NEW DOM ELEMENT REFERENCE
 
 
 // ====================================================================
@@ -456,7 +456,7 @@ function getStatusClassName(status) {
  * FIXED: Helper to retrieve the total fee net from the record, specifically for the selected advocate.
  * This ensures the tracker table cell matches the net fee in the breakdown popup.
  * @param {string} loanNo - The loan number.
- * @param {string} advocateName - The advocate selected in the tracker dropdown.
+ * @param {string} advocateName - The name of the advocate selected in the tracker dropdown.
  * @returns {number} The net fee (Fees - TDS) for the sections the advocate is responsible for.
  */
 function getRecordFeeNet(loanNo, advocateName) { 
@@ -729,10 +729,103 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
 // 4.5. ADVOCATE TRACKER DISPLAY LOGIC (MODIFIED for Combined Status/Fee)
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
+/**
+ * NEW FUNCTION: Calculates and renders the overall statistics report for the selected advocate.
+ * @param {Array} filteredRecords - The subset of ALL_RECORDS relevant to the selected advocate.
+ * @param {string} selectedAdvocate - The name of the advocate.
+ */
+function renderAdvocateStatsReport(filteredRecords, selectedAdvocate) {
+    if (filteredRecords.length === 0) {
+        ADVOCATE_STATS_REPORT.style.display = 'none';
+        return;
+    }
+
+    let totalCases = filteredRecords.length;
+    let totalNetAmount = 0;
+
+    let stats = {
+        'Paid': { count: 0, amount: 0 },
+        'Rejected': { count: 0, amount: 0 },
+        'Processing': { count: 0, amount: 0 }, // Covers Processing and any other non-Paid/non-Rejected status
+    };
+
+    filteredRecords.forEach(record => {
+        const loanNo = record["Loan No"];
+        const netFee = getRecordFeeNet(loanNo, selectedAdvocate);
+        // The helper determines the *relevant* status for this advocate/section
+        const status = getAdvocatePaymentStatusForTracker(record, selectedAdvocate);
+
+        totalNetAmount += netFee;
+
+        let statusKey = 'Processing'; 
+
+        if (status === 'Paid') {
+            statusKey = 'Paid';
+        } else if (status === 'Rejected') {
+            statusKey = 'Rejected';
+        }
+        
+        stats[statusKey].count++;
+        stats[statusKey].amount += netFee;
+    });
+
+    // Calculate Payable Amount
+    const totalPaidAmount = stats['Paid'].amount;
+    const totalPayableAmount = totalNetAmount - totalPaidAmount;
+
+    // --- Render HTML ---
+    let html = `
+        <div class="stats-card">
+            <h4 class="card-title">Total Portfolio Summary (Net Fee)</h4>
+            <div class="stats-grid">
+                <div class="stat-item total-cases">
+                    <span class="stat-label">Total Cases</span>
+                    <span class="stat-value">${totalCases}</span>
+                </div>
+                <div class="stat-item total-net-amount">
+                    <span class="stat-label">Total Net Fee Value</span>
+                    <span class="stat-value">${formatCurrency(totalNetAmount)}</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stats-card status-breakdown-card">
+            <h4 class="card-title">Status Breakdown</h4>
+            <div class="stats-grid status-grid">
+                <div class="stat-item paid-stats">
+                    <span class="stat-label">Paid Cases</span>
+                    <span class="stat-value">${stats['Paid'].count}</span>
+                    <span class="stat-amount">Amount: ${formatCurrency(stats['Paid'].amount)}</span>
+                </div>
+                <div class="stat-item rejected-stats">
+                    <span class="stat-label">Rejected Cases</span>
+                    <span class="stat-value">${stats['Rejected'].count}</span>
+                    <span class="stat-amount">Amount: ${formatCurrency(stats['Rejected'].amount)}</span>
+                </div>
+                <div class="stat-item processing-stats">
+                    <span class="stat-label">Processing/Unpaid Cases</span>
+                    <span class="stat-value">${stats['Processing'].count}</span>
+                    <span class="stat-amount">Amount: ${formatCurrency(stats['Processing'].amount)}</span>
+                </div>
+            </div>
+            
+            <div class="stat-item total-payable">
+                <span class="stat-label"><strong>TOTAL NET PAYABLE (Total Net - Paid Amount)</strong></span>
+                <span class="stat-value">${formatCurrency(totalPayableAmount)}</span>
+            </div>
+        </div>
+    `;
+
+    ADVOCATE_STATS_REPORT.innerHTML = html;
+    ADVOCATE_STATS_REPORT.style.display = 'flex'; // Show the report
+}
+
+
 function displayAdvocateSummary(selectedAdvocate) {
     
     if (!selectedAdvocate) {
         ADVOCATE_PAYMENTS_VIEW.innerHTML = '<p>Select an Advocate to see their payment summary.</p>';
+        ADVOCATE_STATS_REPORT.style.display = 'none'; // Hide report when no advocate is selected
         return;
     }
 
@@ -743,8 +836,12 @@ function displayAdvocateSummary(selectedAdvocate) {
     
     if (filteredRecords.length === 0) {
         ADVOCATE_PAYMENTS_VIEW.innerHTML = `<p>No payment records found for Advocate: ${selectedAdvocate}.</p>`;
+        ADVOCATE_STATS_REPORT.style.display = 'none'; // Hide report when no records
         return;
     }
+
+    // NEW STEP: Render the statistical report first
+    renderAdvocateStatsReport(filteredRecords, selectedAdvocate); 
 
     let tableHTML = `
         <table class="advocate-summary-table">
@@ -1006,7 +1103,6 @@ function displayLoan() {
 
     if (record) {
         window.CURRENT_LOAN_RECORD = record;
-        // renderSnapshot(record); // REMOVED
         
         // FIX: Ensure Sections 5 and 6 are displayed by setting the toggle state before rendering.
         ADVOCATE_FEE_TOGGLE.checked = true; // Set to true to show detailed blocks by default
@@ -1018,7 +1114,6 @@ function displayLoan() {
         LOADING_STATUS.textContent = `Data loaded for Loan No: ${loanNo}. Click section headers to expand.`;
     } else {
         DATA_BLOCKS_CONTAINER.innerHTML = '';
-        // SNAPSHOT_BOX.innerHTML = ''; // REMOVED
         NOT_FOUND_MESSAGE.textContent = `❌ Error: Selected loan not found in data cache.`;
         NOT_FOUND_MESSAGE.style.display = 'block';
         LOADING_STATUS.textContent = 'Search complete.';
