@@ -142,9 +142,10 @@ function calculateChargesNet(record, fields) {
 
 /**
  * Function to calculate the required Advocate Fee Payment Net (Fees - TDS, ignoring GST)
+ * CRITICAL: This calculation is used for the Net Payable button value and the breakdown total.
  * @param {object} record - The loan record.
  * @param {string[]} feeFields - The list of fields containing fees and TDS (e.g., AdvocateFeeNetFields).
- * @returns {number} The net payment amount.
+ * @returns {number} The net payment amount (Fees - TDS).
  */
 function calculateAdvocateFeePaymentNet(record, feeFields) {
     let totalNet = 0;
@@ -165,7 +166,7 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 
 /**
  * NEW HELPER: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
- * This is used for the main snapshot box to align with the tracker's requirement.
+ * This is used for the main snapshot box and the Net Payable button amount.
  */
 function calculateTotalAdvocateFeeNet(record) {
     const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
@@ -451,7 +452,6 @@ document.addEventListener('DOMContentLoaded', initialLoad);
 
 /**
  * Function to update the Loan No. dropdown based on filtered records.
- * FIX: This was previously omitted.
  */
 function updateLoanSelect(records) {
     const loanSelect = document.getElementById('loan-select');
@@ -470,7 +470,6 @@ function updateLoanSelect(records) {
 
 /**
  * Function to handle branch selection change.
- * FIX: This was previously omitted.
  */
 function handleBranchSelectChange() {
     const selectedBranch = BRANCH_SELECT.value;
@@ -495,7 +494,6 @@ function handleBranchSelectChange() {
 
 /**
  * Function to handle the search button click.
- * FIX: This was previously omitted.
  */
 function handleSearchClick() {
     const loanNo = LOAN_SELECT.value;
@@ -521,7 +519,6 @@ function handleSearchClick() {
 
 /**
  * Function to display loan details in the blocks and snapshot.
- * FIX: This was previously omitted.
  */
 function displayLoanDetails(record) {
     // 1. Snapshot Box
@@ -564,7 +561,8 @@ function displayLoanDetails(record) {
         let subtotalFees = 0;
         let subtotalGST = 0;
         let subtotalTDS = 0;
-        let blockNetTotal = 0;
+        let blockNetFeesMinusTDS = 0; // Tracks (Fees - TDS) for the block
+        let blockNetTotal = 0; // Tracks (Fees + GST - TDS + Other Charges Net)
         let isFeeBlock = block.title.includes('Fee');
         let feeFields = isFeeBlock ? (block.title.includes('138') ? CHARGE_DEFINITIONS_138 : CHARGE_DEFINITIONS_09) : null;
         let otherChargesNet = 0;
@@ -591,6 +589,8 @@ function displayLoanDetails(record) {
             // Calculate subtotals for Fee blocks
             if (isFeeBlock && rawValue !== 'N/A') {
                 const numValue = parseNumber(rawValue);
+                
+                // Track Totals
                 if (sheetHeader.includes("GST")) {
                     subtotalGST += numValue;
                 } else if (sheetHeader.includes("TDS")) {
@@ -599,12 +599,13 @@ function displayLoanDetails(record) {
                     subtotalFees += numValue;
                 }
                 
-                // Calculate the block's net total for all displayed rows
-                if (sheetHeader.includes("TDS")) {
-                    blockNetTotal -= numValue;
-                } else {
-                    blockNetTotal += numValue;
+                // Track Net Fee (Fees - TDS)
+                if (!sheetHeader.includes("GST")) {
+                    blockNetFeesMinusTDS += numValue * (sheetHeader.includes("TDS") ? -1 : 1);
                 }
+
+                // Track Block Total (Fees + GST - TDS) - for block total calculation before other charges
+                blockNetTotal += numValue * (sheetHeader.includes("TDS") ? -1 : 1);
             }
             
             // Apply highlighting for Critical Fields
@@ -621,7 +622,7 @@ function displayLoanDetails(record) {
         // Add subtotal row for Fee Blocks (Section 5 & 6)
         if (isFeeBlock) {
             
-            // 1. Calculate Other Charges Net (Fees and GST are already handled above)
+            // 1. Calculate Other Charges Net 
             otherChargesNet = calculateChargesNet(record, feeFields.OtherChargesFields);
             
             // 2. Add the subtotal row for Fees/GST/TDS
@@ -634,9 +635,9 @@ function displayLoanDetails(record) {
                     <span class="label">TOTAL TDS:</span>
                     <span class="value minus-value">${formatCurrency(subtotalTDS)}</span>
                 </div>
-                <div class="subtotal-row total-section">
-                    <span class="label">NET FEES (Fees + GST - TDS):</span>
-                    <span class="value">${formatCurrency(blockNetTotal)}</span>
+                <div class="subtotal-row total-section final-total-fees">
+                    <span class="label">NET FEES (Fees - TDS):</span>
+                    <span class="value">${formatCurrency(blockNetFeesMinusTDS)}</span>
                 </div>
                 <div class="subtotal-row empty-col"></div> 
             `;
@@ -644,7 +645,7 @@ function displayLoanDetails(record) {
             // 3. Add the Other Charges Net (still included here for the detail view blocks)
             blocksHTML += `
                 <div class="subtotal-row other-charges-total">
-                    <span class="label">Other Charges Net:</span>
+                    <span class="label">Other Charges Net (Sec 09 Net):</span>
                     <span class="value">${formatCurrency(otherChargesNet)}</span>
                 </div>
                 <div class="subtotal-row empty-col"></div> 
@@ -652,10 +653,11 @@ function displayLoanDetails(record) {
                 <div class="subtotal-row empty-col"></div> 
             `;
             
-            // 4. Add the FINAL TOTAL (Net Fees + Other Charges Net)
+            // 4. Add the FINAL TOTAL (Net Fees + GST - TDS + Other Charges Net)
+            // Note: blockNetTotal already holds (Fees + GST - TDS)
             blocksHTML += `
-                <div class="final-total-row">
-                    <span class="label">BLOCK TOTAL (Fees Net + Other Charges Net):</span>
+                <div class="final-total-row final-block-total">
+                    <span class="label">BLOCK TOTAL (Fees+GST-TDS + Other Charges Net):</span>
                     <span class="value">${formatCurrency(blockNetTotal + otherChargesNet)}</span>
                 </div>
             `;
@@ -858,7 +860,8 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
         // get selected value
         const newStatus = select.value;
         try {
-            await confirmSaveStatus(loanNo, newStatus, tdElement); // pass DOM tdElement
+            // Note: We pass the advocateName from the dropdown for clarity, though currentAdvocate is also accessed via global
+            await confirmSaveStatus(loanNo, newStatus, tdElement, advocateName); 
         } catch (err) {
             console.error('Unexpected error in save click:', err);
             // Revert on failure
@@ -888,20 +891,20 @@ function enableStatusDropdown(tdElement, loanNo, currentStatus, advocateName) {
 }
 
 // ---------- CORRECTED confirmSaveStatus (CRITICAL) ----------
-// MODIFICATION: Uses revertToCombinedCell to restore the full cell structure.
-async function confirmSaveStatus(loanNo, newStatus, tdElement) {
+// MODIFICATION: Logic verified for correct column determination.
+async function confirmSaveStatus(loanNo, newStatus, tdElement, advocateName) {
     const sel = tdElement.querySelector('.status-select');
     const originalStatus = (sel && sel.dataset && sel.dataset.originalStatus) ? sel.dataset.originalStatus : 'Processing';
     
-    // Get advocate name from the global filtering dropdown
-    const currentAdvocate = (typeof ADVOCATE_TRACKER_SELECT !== 'undefined' && ADVOCATE_TRACKER_SELECT && ADVOCATE_TRACKER_SELECT.value) ? ADVOCATE_TRACKER_SELECT.value : '';
+    // Use the advocateName passed from the popup initiation
+    const currentAdvocate = advocateName || ADVOCATE_TRACKER_SELECT.value; 
 
     if (!newStatus || newStatus === originalStatus) {
         revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
         return;
     }
     
-    // --- CRITICAL FIX: Determine the actual COLUMN HEADER ---
+    // --- CRITICAL: Determine the actual COLUMN HEADER ---
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === String(loanNo).trim());
     let targetColumn = '';
     
@@ -909,11 +912,11 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
         const normalizedAdvocate = currentAdvocate.trim();
         // 1. If the current advocate is the primary 'ADVOCATE' (BO), use '138 Payment'
         if (String(record['ADVOCATE']).trim() === normalizedAdvocate) {
-            targetColumn = '138 Payment'; // <-- FIX: Use actual BO column header
+            targetColumn = '138 Payment'; 
         } 
         // 2. If the current advocate is the secondary 'Sec/9 Advocate' (BP), use 'sec9 Payment'
         else if (String(record['Sec/9 Advocate']).trim() === normalizedAdvocate) {
-            targetColumn = 'sec9 Payment'; // <-- FIX: Use actual BP column header
+            targetColumn = 'sec9 Payment'; 
         }
     }
 
@@ -925,11 +928,8 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
 
     // 2. Build the payload using the determined actual column header (targetColumn)
     const dataToSend = {
-        // This will be the unique key to identify the row to update
         'Loan No': loanNo, 
-        // This is the column that needs to be updated
         'headerName': targetColumn, 
-        // This is the new value
         'dataValue': newStatus
     };
     
@@ -963,7 +963,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
     } catch (error) {
         console.error("Update Error:", error);
         revertToCombinedCell(tdElement, originalStatus, loanNo, currentAdvocate);
-        alert("Network error during update. Status reverted.");
+        alert("Network error during update. Status reverted. Check API endpoint.");
     }
 }
 
@@ -1040,8 +1040,8 @@ function displayAdvocateSummary() {
 
 /**
  * Displays the fee breakdown in a modal popup. (MODIFIED)
- * - Removed "Other Charges" display and calculation from the total.
- * - Simplified the total label.
+ * - CRITICAL FIX: Calculation now correctly excludes GST to match button value (Fees - TDS).
+ * - FIX: Removed ** from labels to prevent rendering issues.
  * @param {HTMLElement} buttonElement - The button that was clicked.
  */
 function showFeeBreakdown(buttonElement) {
@@ -1055,8 +1055,8 @@ function showFeeBreakdown(buttonElement) {
     }
 
     let html = '';
-    let sec138FeeTotal = 0;
-    let sec09FeeTotal = 0;
+    let sec138FeeTotal = 0; // Tracks Fees - TDS
+    let sec09FeeTotal = 0; // Tracks Fees - TDS
 
     // --- SECTION 138 BREAKDOWN ---
     if (String(record['ADVOCATE']).trim() === advocateName.trim()) {
@@ -1075,21 +1075,23 @@ function showFeeBreakdown(buttonElement) {
             
             html += `
                 <div class="breakdown-item">
-                    <span class="label">**${displayLabel.includes('Fee') ? displayLabel.replace('Fee', 'Fee') : displayLabel}:**</span>
+                    <span class="label">${displayLabel}:</span>
                     <span class="value ${valueClass}">${formatCurrency(value)}</span>
                 </div>
             `;
             
-            // Calculate the total net for the section (Fees + GST - TDS)
-            sec138FeeTotal += value * (isTDS ? -1 : 1);
+            // CRITICAL FIX: Calculate the total net for the section as (Fees - TDS), excluding GST
+            if (!field.includes("GST")) {
+                 sec138FeeTotal += value * (isTDS ? -1 : 1);
+            }
         });
         
         html += `</div>`;
         
-        // CRITICAL FIX: Update label to remove "Other Charges"
+        // CRITICAL FIX: Update label to reflect the Fee-TDS only calculation
         html += `
             <div class="breakdown-total">
-                <span class="label">SEC 138 NET PAYABLE (Fees + GST - TDS):</span>
+                <span class="label">SEC 138 NET PAYABLE (Fees - TDS):</span>
                 <span class="value">${formatCurrency(sec138FeeTotal)}</span>
             </div>
             <hr>
@@ -1113,21 +1115,23 @@ function showFeeBreakdown(buttonElement) {
             
             html += `
                 <div class="breakdown-item">
-                    <span class="label">**${displayLabel.includes('Fee') ? displayLabel.replace('Fee', 'Fee') : displayLabel}:**</span>
+                    <span class="label">${displayLabel}:</span>
                     <span class="value ${valueClass}">${formatCurrency(value)}</span>
                 </div>
             `;
             
-            // Calculate the total net for the section (Fees + GST - TDS)
-            sec09FeeTotal += value * (isTDS ? -1 : 1);
+            // CRITICAL FIX: Calculate the total net for the section as (Fees - TDS), excluding GST
+            if (!field.includes("GST")) {
+                sec09FeeTotal += value * (isTDS ? -1 : 1);
+            }
         });
 
         html += `</div>`;
         
-        // CRITICAL FIX: Update label to remove "Other Charges"
+        // CRITICAL FIX: Update label to reflect the Fee-TDS only calculation
         html += `
             <div class="breakdown-total">
-                <span class="label">SEC 09 NET PAYABLE (Fees + GST - TDS):</span>
+                <span class="label">SEC 09 NET PAYABLE (Fees - TDS):</span>
                 <span class="value">${formatCurrency(sec09FeeTotal)}</span>
             </div>
         `;
@@ -1162,6 +1166,7 @@ function showFeeBreakdown(buttonElement) {
     `;
     document.body.appendChild(modal);
 }
+
 
 
 // ====================================================================
@@ -1215,7 +1220,7 @@ FORM.addEventListener('submit', async function(e) {
 
     } catch (error) {
         console.error("Error submitting data:", error);
-        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not submit data.';
+        MESSAGE_ELEMENT.textContent = '❌ Network Error. Could not submit data. Check API endpoint.';
     }
 });
 
