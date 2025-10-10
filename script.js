@@ -162,8 +162,8 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 }
 
 /**
- * NEW HELPER: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
- * This is used for the main snapshot box to align with the tracker's requirement.
+ * Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
+ * This is used for the main snapshot box.
  */
 function calculateTotalAdvocateFeeNet(record) {
     const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
@@ -251,7 +251,7 @@ const CHARGE_DEFINITIONS_09 = {
 
 // --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
-// ... (DISPLAY_BLOCKS remains unchanged)
+// ... (DISPLAY_BLOCKS remains unchanged, omitted for brevity)
     {
         title: "1) Customer & Loan Details",
         fields: {
@@ -470,21 +470,30 @@ function getStatusClassName(status) {
 }
 
 /**
- * Helper to retrieve the total fee net from the record.
- * Used when reconstructing the combined cell after an edit.
- * CRITICAL: This now correctly only uses Fees - TDS.
+ * Helper to retrieve the advocate-specific total fee net from the record.
+ * CRITICAL FIX RESTORED: This now returns the NET FEE ONLY for the sections the advocate is assigned to.
+ * This is the value that must match the pop-up breakdown for the relevant sections.
  */
-function getRecordFeeNet(loanNo) {
+function getRecordFeeNet(loanNo, advocateName) { // CORRECTED: ADD advocateName parameter
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
-    if (!record) return 0;
+    if (!record || !advocateName) return 0;
     
-    // Calculate Net Fee for Sec 138 (Fees - TDS)
-    const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-    // Calculate Net Fee for Sec 09 (Fees - TDS)
-    const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    const normalizedAdvocate = advocateName.trim();
+    let advocateSpecificNetFee = 0;
+
+    const isAdvocate138 = String(record["ADVOCATE"] || '').trim() === normalizedAdvocate;
+    const isAdvocate09 = String(record["Sec/9 Advocate"] || '').trim() === normalizedAdvocate;
+
+    // Only add the net fee for the section(s) the advocate is attached to
+    if (isAdvocate138) {
+        advocateSpecificNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+    }
+    if (isAdvocate09) {
+        advocateSpecificNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    }
     
-    // Return the total net fee for all sections.
-    return feeNet138 + feeNet09;
+    // Return the total net fee for the section(s) the advocate is attached to.
+    return advocateSpecificNetFee;
 }
 
 
@@ -515,8 +524,8 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
  * Used for initial rendering, and for reverting/confirming status changes.
  */
 function revertToCombinedCell(tdElement, newStatus, loanNo, advocateName) {
-    // CRITICAL: Ensure this is the correct Net Fee calculation
-    const totalFeeNet = getRecordFeeNet(loanNo);
+    // CRITICAL FIX: Ensure this is the correct Net Fee calculation (Advocate-Specific Net)
+    const totalFeeNet = getRecordFeeNet(loanNo, advocateName); // CORRECTED: Pass advocateName
     const statusTagHTML = revertToTag(null, newStatus, loanNo, advocateName);
 
     const htmlContent = `
@@ -778,14 +787,9 @@ function displayAdvocateSummary(selectedAdvocate) {
         // Use the helper to get the status relevant to the current advocate/section
         const statusValue = getAdvocatePaymentStatusForTracker(record, selectedAdvocate); 
         
-        // Calculate Net Fee for Sec 138 (Fees - TDS)
-        const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-        // Calculate Net Fee for Sec 09 (Fees - TDS)
-        const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-        
-        // Combine both net fees for the grand total and display
-        const totalFeeNet = feeNet138 + feeNet09;
-        grandTotalNet += totalFeeNet;
+        // CRITICAL FIX: Get only the fee net for the section(s) this advocate is responsible for.
+        const advocateSpecificNetFee = getRecordFeeNet(loanNo, selectedAdvocate);
+        grandTotalNet += advocateSpecificNetFee; // Sum up the advocate-specific totals for the footer
         
         const sections = [];
         if (String(record["ADVOCATE"] || '').trim() === selectedAdvocate) sections.push("Sec 138");
@@ -809,7 +813,7 @@ function displayAdvocateSummary(selectedAdvocate) {
 
     tableHTML += `
             <tr class="grand-total-row">
-                <td colspan="4" style="text-align: right; font-weight: 700;">GRAND TOTAL (NET FEE ONLY):</td>
+                <td colspan="4" style="text-align: right; font-weight: 700;">ADVOCATE-SPECIFIC NET FEE GRAND TOTAL:</td>
                 <td style="font-weight: 700; color: var(--color-primary);" class="right-align">${formatCurrency(grandTotalNet)}</td>
             </tr>
         </tbody>
@@ -828,7 +832,7 @@ function displayAdvocateSummary(selectedAdvocate) {
     LOADING_STATUS.textContent = `Summary loaded for ${selectedAdvocate}. ${filteredRecords.length} records found.`;
 }
 
-// 4.6. NEW FUNCTION: Show Fee Breakdown (MODIFIED)
+// 4.6. NEW FUNCTION: Show Fee Breakdown 
 function showFeeBreakdown(buttonElement) {
     const loanNo = buttonElement.dataset.loanNo;
     const advocateName = buttonElement.dataset.advocate;
@@ -860,16 +864,12 @@ function showFeeBreakdown(buttonElement) {
     
     let breakdownHTML = `<div class="breakdown-container">`;
     
-    // Helper function to render a single fee section (MODIFIED for structure and content)
+    // Helper function to render a single fee section 
     const renderFeeSection = (sectionTitle, definitions, isAdvocateForSection) => {
         if (!isAdvocateForSection) return '';
 
-        // 1. Prepare data and calculate totals
-        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
-        
         let totalFee = 0;
         let totalTDS = 0;
-        let totalGST = 0;
         
         // --- Build Section HTML ---
         let sectionHTML = `
@@ -885,6 +885,8 @@ function showFeeBreakdown(buttonElement) {
         let initialFeeField = definitions === CHARGE_DEFINITIONS_138 ? "Initial Fee for Sec.138" : "Initial Fee for Sec 09";
         let tdsFinalField = definitions === CHARGE_DEFINITIONS_138 ? "TDS of Final fee for Sec 138" : "TDS of Final Fee For Sec 09";
         let tdsInitialField = definitions === CHARGE_DEFINITIONS_138 ? "TDS of Sec.138 Initial Fee" : "TDS of Initial Fee";
+        
+        const gstFields = definitions.AdvocateFeeFieldsDisplay.filter(f => f.includes("GST"));
         
         // Use crisp display names and filter out zero-value fields
         const orderedFields = [
@@ -923,7 +925,7 @@ function showFeeBreakdown(buttonElement) {
         const totalNetFeeOnly = totalFee - totalTDS;
         sectionHTML += `
             <tr class="section-net-total-fee-only">
-                <td><strong>TOTAL FEE NET (Fees - TDS):</strong></td>
+                <td><strong>TOTAL FEE NET (Fees - TDS) for ${sectionTitle}:</strong></td>
                 <td class="right-align"><strong>${formatCurrency(totalNetFeeOnly)}</strong></td>
             </tr>
             <tr><td colspan="2" class="separator"></td></tr>
@@ -933,7 +935,6 @@ function showFeeBreakdown(buttonElement) {
         sectionHTML += `<tr class="group-header gst-header"><td colspan="2">GST COMPONENTS (For Reference Only)</td></tr>`;
         gstFields.filter(field => getRecordValue(field) > 0).forEach(field => { // Only show non-zero GST
             const value = getRecordValue(field);
-            totalGST += value;
             sectionHTML += `
                 <tr class="gst-row">
                     <td>${FEE_FIELD_MAP[field] || field}</td>
@@ -942,7 +943,6 @@ function showFeeBreakdown(buttonElement) {
             `;
         });
         
-        // The total net for the section is simply totalNetFeeOnly.
         sectionHTML += `</table></div>`;
         return sectionHTML;
     };
@@ -1221,8 +1221,6 @@ function renderFilteredBlocks(record, showDetailedFees) {
     });
 }
 
-// --- NEW/RE-ADDED ACCORDION LOGIC START ---
-
 // Function to handle the accordion toggle logic
 function toggleAccordion(event) {
     const header = event.currentTarget;
@@ -1261,8 +1259,6 @@ function addAccordionListeners() {
         header.addEventListener('click', toggleAccordion);
     });
 }
-
-// --- NEW/RE-ADDED ACCORDION LOGIC END ---
 
 // Toggle functionality for Blocks 5 & 6
 ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
