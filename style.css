@@ -94,8 +94,8 @@ button:disabled {
 
 /* --- 3. LOAN DATA VIEW STYLES (DATA BLOCKS) --- */
 #data-view-blocks {
-    padding: 0; /* Remove padding from the section wrapper */
-    box-shadow: none; /* Remove shadow from the section wrapper */
+    padding: 0; 
+    box-shadow: none; 
     background: none;
 }
 
@@ -464,103 +464,123 @@ button:disabled {
 }
 
 
-/* --- NEW ADVOCATE STATS REPORT STYLES --- */
+/* --- NEW ADVOCATE STATS REPORT STYLES (CRISP & LEAN) --- */
 .stats-report-container {
-    display: flex;
-    gap: 20px;
-    justify-content: space-between;
-    align-items: flex-start;
-    padding: 15px;
-    background-color: #e8f5e9; /* Very light success background */
-    border: 2px solid #81c784; /* Success border */
+    /* Single container for the whole report */
+    display: block; 
+    padding: 20px; 
+    background-color: var(--color-surface); 
+    border: 1px solid var(--color-border);
     border-radius: 8px;
     box-shadow: var(--shadow-medium);
 }
 
-.stats-card {
-    flex: 1;
-    min-width: 300px;
-    padding: 15px;
-    border: 1px solid var(--color-border);
-    border-radius: 6px;
-    background-color: var(--color-surface); 
-}
-
-.stats-card .card-title {
-    color: var(--color-secondary);
+.stats-report-container .card-title {
+    color: var(--color-primary);
     border-bottom: 2px solid var(--color-border);
-    padding-bottom: 5px;
+    padding-bottom: 8px;
     margin-top: 0;
-    margin-bottom: 15px;
-    font-size: 1.1em;
+    margin-bottom: 20px;
+    font-size: 1.2em;
 }
 
-.stats-grid {
+.stats-grid-lean {
+    /* 3-column grid for key financial metrics */
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr); 
     gap: 15px;
-}
-
-/* Specific grid for status breakdown */
-.status-breakdown-card .stats-grid {
-    grid-template-columns: 1fr;
-    gap: 10px;
-    margin-bottom: 15px;
-    padding-bottom: 15px;
-    border-bottom: 1px dashed var(--color-border);
 }
 
 .stat-item {
     display: flex;
     flex-direction: column;
-    padding: 10px;
-    background-color: #f7f9fc;
+    padding: 12px;
     border-radius: 4px;
+    background-color: #f7f9fc;
     border: 1px solid var(--color-border);
+    transition: transform 0.2s;
+}
+
+.stat-item:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
 .stat-label {
-    font-size: 0.9em;
+    font-size: 0.85em;
     color: var(--color-secondary);
     font-weight: 500;
+    margin-bottom: 3px;
+    text-transform: uppercase;
 }
 
 .stat-value {
-    font-size: 1.4em;
+    font-size: 1.5em;
     font-weight: 700;
+}
+
+/* 1. TOTALS */
+.stat-item.total-cases-lean {
+    background-color: #e3f2fd; /* Light Blue */
+    border-color: var(--color-primary);
+}
+.stat-item.total-cases-lean .stat-value {
     color: var(--color-primary);
 }
 
-/* Total Net Amount */
-.stat-item.total-net-amount .stat-value {
-    color: var(--color-primary); /* Use primary blue for Total Portfolio Value */
-    font-size: 1.6em;
+.stat-item.total-net-amount-lean {
+    background-color: #fffde7; /* Light Yellow */
+    border-color: var(--color-accent);
+    grid-column: span 2; /* Span two columns */
 }
-
-/* Breakdown Amounts */
-.stat-item .stat-amount {
-    font-size: 1.1em;
-    font-weight: 600;
+.stat-item.total-net-amount-lean .stat-value {
     color: var(--color-accent);
+    font-size: 1.8em;
 }
 
-/* Total Payable (Highlighted) */
-.stat-item.total-payable {
-    background-color: #ffe0b2; /* Light orange background */
-    border: 2px solid var(--color-accent);
-    padding: 15px;
-    align-items: center;
+
+/* 2. STATUS BREAKDOWN */
+.stat-item.paid-stats-lean {
+    background-color: #e8f5e9; /* Light Green */
+    border-color: var(--color-success);
+}
+.stat-item.paid-stats-lean .stat-value {
+    color: var(--color-success);
 }
 
-.stat-item.total-payable .stat-value {
-    color: var(--color-accent);
-    font-size: 2em;
+.stat-item.rejected-stats-lean {
+    background-color: #ffebee; /* Light Red */
+    border-color: var(--color-danger);
+}
+.stat-item.rejected-stats-lean .stat-value {
+    color: var(--color-danger);
 }
 
-.stat-item.total-payable .stat-label {
+.stat-item.processing-stats-lean {
+    background-color: #fce4ec; /* Light Pink/Purple */
+    border-color: #ad1457; /* Darker Pink */
+}
+.stat-item.processing-stats-lean .stat-value {
+    color: #ad1457;
+}
+
+/* 3. FINAL PAYABLE (Must be on its own line) */
+.stat-item.total-payable-lean {
+    grid-column: 1 / -1; /* Span entire width */
+    margin-top: 10px;
+    background-color: var(--color-primary); /* Primary Blue */
+    color: white;
+    border-color: var(--color-secondary);
+}
+
+.stat-item.total-payable-lean .stat-label {
+    color: white;
     font-size: 1em;
-    font-weight: 700;
-    color: var(--color-secondary);
+}
+
+.stat-item.total-payable-lean .stat-value {
+    color: white;
+    font-size: 2.2em;
 }
 
 
@@ -636,17 +656,10 @@ button:disabled {
     }
     
     /* Stats Report Mobile */
-    .stats-report-container {
-        flex-direction: column;
-        gap: 15px;
+    .stats-grid-lean {
+        grid-template-columns: 1fr; /* Single column on mobile */
     }
-    .stats-card {
-        min-width: 100%;
-    }
-    .stats-grid {
-        grid-template-columns: 1fr;
-    }
-    .stat-item.total-payable .stat-value {
-        font-size: 1.6em;
+    .stat-item.total-net-amount-lean {
+        grid-column: span 1; /* Reset span on mobile */
     }
 }

@@ -730,7 +730,7 @@ async function confirmSaveStatus(loanNo, newStatus, tdElement) {
 ADVOCATE_TRACKER_SELECT.addEventListener('change', () => displayAdvocateSummary(ADVOCATE_TRACKER_SELECT.value));
 
 /**
- * NEW FUNCTION: Calculates and renders the overall statistics report for the selected advocate.
+ * NEW FUNCTION: Calculates and renders the overall statistics report for the selected advocate (now crisp and lean).
  * @param {Array} filteredRecords - The subset of ALL_RECORDS relevant to the selected advocate.
  * @param {string} selectedAdvocate - The name of the advocate.
  */
@@ -752,7 +752,6 @@ function renderAdvocateStatsReport(filteredRecords, selectedAdvocate) {
     filteredRecords.forEach(record => {
         const loanNo = record["Loan No"];
         const netFee = getRecordFeeNet(loanNo, selectedAdvocate);
-        // The helper determines the *relevant* status for this advocate/section
         const status = getAdvocatePaymentStatusForTracker(record, selectedAdvocate);
 
         totalNetAmount += netFee;
@@ -771,53 +770,48 @@ function renderAdvocateStatsReport(filteredRecords, selectedAdvocate) {
 
     // Calculate Payable Amount
     const totalPaidAmount = stats['Paid'].amount;
+    const totalRejectedAmount = stats['Rejected'].amount;
     const totalPayableAmount = totalNetAmount - totalPaidAmount;
+    const processingAmount = stats['Processing'].amount;
 
-    // --- Render HTML ---
+
+    // --- Render HTML - Single, Crisp Report ---
     let html = `
-        <div class="stats-card">
-            <h4 class="card-title">Total Portfolio Summary (Net Fee)</h4>
-            <div class="stats-grid">
-                <div class="stat-item total-cases">
-                    <span class="stat-label">Total Cases</span>
-                    <span class="stat-value">${totalCases}</span>
-                </div>
-                <div class="stat-item total-net-amount">
-                    <span class="stat-label">Total Net Fee Value</span>
-                    <span class="stat-value">${formatCurrency(totalNetAmount)}</span>
-                </div>
+        <h4 class="card-title">Advocate Portfolio Summary (Net Fee Only)</h4>
+        
+        <div class="stats-grid-lean">
+            
+            <div class="stat-item total-cases-lean">
+                <span class="stat-label">Total Cases</span>
+                <span class="stat-value">${totalCases}</span>
             </div>
-        </div>
-
-        <div class="stats-card status-breakdown-card">
-            <h4 class="card-title">Status Breakdown</h4>
-            <div class="stats-grid status-grid">
-                <div class="stat-item paid-stats">
-                    <span class="stat-label">Paid Cases</span>
-                    <span class="stat-value">${stats['Paid'].count}</span>
-                    <span class="stat-amount">Amount: ${formatCurrency(stats['Paid'].amount)}</span>
-                </div>
-                <div class="stat-item rejected-stats">
-                    <span class="stat-label">Rejected Cases</span>
-                    <span class="stat-value">${stats['Rejected'].count}</span>
-                    <span class="stat-amount">Amount: ${formatCurrency(stats['Rejected'].amount)}</span>
-                </div>
-                <div class="stat-item processing-stats">
-                    <span class="stat-label">Processing/Unpaid Cases</span>
-                    <span class="stat-value">${stats['Processing'].count}</span>
-                    <span class="stat-amount">Amount: ${formatCurrency(stats['Processing'].amount)}</span>
-                </div>
+            <div class="stat-item total-net-amount-lean">
+                <span class="stat-label">Total Net Fee Value</span>
+                <span class="stat-value">${formatCurrency(totalNetAmount)}</span>
             </div>
             
-            <div class="stat-item total-payable">
-                <span class="stat-label"><strong>TOTAL NET PAYABLE (Total Net - Paid Amount)</strong></span>
+            <div class="stat-item paid-stats-lean">
+                <span class="stat-label">Paid Cases (${stats['Paid'].count})</span>
+                <span class="stat-value">${formatCurrency(totalPaidAmount)}</span>
+            </div>
+            <div class="stat-item rejected-stats-lean">
+                <span class="stat-label">Rejected Cases (${stats['Rejected'].count})</span>
+                <span class="stat-value">${formatCurrency(totalRejectedAmount)}</span>
+            </div>
+            <div class="stat-item processing-stats-lean">
+                <span class="stat-label">Processing/Unpaid Cases (${stats['Processing'].count})</span>
+                <span class="stat-value">${formatCurrency(processingAmount)}</span>
+            </div>
+            
+            <div class="stat-item total-payable-lean">
+                <span class="stat-label">NET PAYABLE (Total Fee - Paid)</span>
                 <span class="stat-value">${formatCurrency(totalPayableAmount)}</span>
             </div>
         </div>
     `;
 
     ADVOCATE_STATS_REPORT.innerHTML = html;
-    ADVOCATE_STATS_REPORT.style.display = 'flex'; // Show the report
+    ADVOCATE_STATS_REPORT.style.display = 'block'; // Show the report
 }
 
 
