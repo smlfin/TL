@@ -162,14 +162,13 @@ function calculateAdvocateFeePaymentNet(record, feeFields) {
 }
 
 /**
- * NEW HELPER: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
- * This is used for the main snapshot box to align with the tracker's requirement.
- * CRITICAL: This is the function that meets the user's final requirement. It only sums Fees - TDS, 
- * excluding all other charges.
+ * CORE LOGIC for Snapshot Box: Calculates the total ADVOCATE FEE NET across both Sec 138 and Sec 09.
+ * This is used for the main snapshot box and includes ALL fees (Fees - TDS) for ALL advocates.
  */
 function calculateTotalAdvocateFeeNet(record) {
     const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
     const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    // This correctly excludes other charges and sums both sections.
     return feeNet138 + feeNet09;
 }
 
@@ -250,13 +249,10 @@ const CHARGE_DEFINITIONS_09 = {
     ]
 };
 
-// Removed: CHARGE_FIELDS_FOR_SNAPSHOT and calculateTotalCharges 
-// (Now using calculateTotalAdvocateFeeNet for consistency)
-
 
 // --- DISPLAY CONFIGURATION (All Fields) ---
 const DISPLAY_BLOCKS = [
-// ... (DISPLAY_BLOCKS remains unchanged)
+// ... (DISPLAY_BLOCKS remains unchanged, omitted for brevity)
     {
         title: "1) Customer & Loan Details",
         fields: {
@@ -380,8 +376,6 @@ const ADVOCATE_PAYMENTS_VIEW = document.getElementById('advocate-payments-view')
 // 3. DROPDOWN POPULATION & CORE LOGIC
 // ====================================================================
 
-// ... (initialLoad and helper functions unchanged)
-
 /**
  * REQUIRED FIX: Defines the function called by initialLoad.
  */
@@ -457,12 +451,6 @@ async function initialLoad() {
 // CRITICAL: Initialize the data fetch on page load
 document.addEventListener('DOMContentLoaded', initialLoad);
 
-// All other functions and event listeners should follow here:
-// ====================================================================
-
-// =ITICAL: Initialize the data fetch on page load
-document.addEventListener('DOMContentLoaded', initialLoad);
-
 // ====================================================================
 // 4. ADVOCATE TRACKER LOGIC
 // ====================================================================
@@ -477,21 +465,30 @@ function getStatusClassName(status) {
 }
 
 /**
- * Helper to retrieve the total fee net from the record.
- * Used when reconstructing the combined cell after an edit.
- * CRITICAL: This now correctly only uses Fees - TDS.
+ * FIXED: Helper to retrieve the total fee net from the record, specifically for the selected advocate.
+ * This ensures the tracker table cell matches the net fee in the breakdown popup.
+ * @param {string} loanNo - The loan number.
+ * @param {string} advocateName - The advocate selected in the tracker dropdown.
+ * @returns {number} The net fee (Fees - TDS) for the sections the advocate is responsible for.
  */
-function getRecordFeeNet(loanNo) {
+function getRecordFeeNet(loanNo, advocateName) { 
     const record = ALL_RECORDS.find(r => String(r["Loan No"]).trim() === loanNo);
     if (!record) return 0;
     
-    // Calculate Net Fee for Sec 138 (Fees - TDS)
-    const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-    // Calculate Net Fee for Sec 09 (Fees - TDS)
-    const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    let totalAdvocateNetFee = 0;
+    const normalizedAdvocate = String(advocateName).trim();
+
+    // Check Sec 138
+    if (String(record['ADVOCATE'] || '').trim() === normalizedAdvocate) {
+        totalAdvocateNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
+    }
     
-    // Return the total net fee for all sections.
-    return feeNet138 + feeNet09;
+    // Check Sec 09
+    if (String(record['Sec/9 Advocate'] || '').trim() === normalizedAdvocate) {
+        totalAdvocateNetFee += calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
+    }
+    
+    return totalAdvocateNetFee; // Returns the net fee only for the relevant sections
 }
 
 
@@ -519,11 +516,11 @@ function revertToTag(tdElement, newStatus, loanNo, advocateName) {
 
 /**
  * Function to reconstruct the entire combined status/fee <td> content.
- * Used for initial rendering, and for reverting/confirming status changes.
+ * CRITICAL FIX: Now passes advocateName to getRecordFeeNet.
  */
 function revertToCombinedCell(tdElement, newStatus, loanNo, advocateName) {
-    // CRITICAL: Ensure this is the correct Net Fee calculation
-    const totalFeeNet = getRecordFeeNet(loanNo);
+    // CRITICAL FIX: Only get the Net Fee for the sections this advocate is responsible for
+    const totalFeeNet = getRecordFeeNet(loanNo, advocateName); 
     const statusTagHTML = revertToTag(null, newStatus, loanNo, advocateName);
 
     const htmlContent = `
@@ -785,15 +782,10 @@ function displayAdvocateSummary(selectedAdvocate) {
         // Use the helper to get the status relevant to the current advocate/section
         const statusValue = getAdvocatePaymentStatusForTracker(record, selectedAdvocate); 
         
-        // Calculate Net Fee for Sec 138 (Fees - TDS)
-        const feeNet138 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_138.AdvocateFeeNetFields);
-        // Calculate Net Fee for Sec 09 (Fees - TDS)
-        const feeNet09 = calculateAdvocateFeePaymentNet(record, CHARGE_DEFINITIONS_09.AdvocateFeeNetFields);
-        
-        // Combine both net fees for the grand total and display
-        const totalFeeNet = feeNet138 + feeNet09;
-        grandTotalNet += totalFeeNet;
-        
+        // CRITICAL FIX: Use the advocate-specific fee calculation for the grand total
+        const advocateSpecificNetFee = getRecordFeeNet(loanNo, selectedAdvocate);
+        grandTotalNet += advocateSpecificNetFee;
+
         const sections = [];
         if (String(record["ADVOCATE"] || '').trim() === selectedAdvocate) sections.push("Sec 138");
         if (String(record["Sec/9 Advocate"] || '').trim() === selectedAdvocate) sections.push("Sec 09");
@@ -1057,7 +1049,8 @@ function renderSnapshot(record) {
         return number.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
     };
 
-    // Use the new helper function for the total, which only includes Fees - TDS.
+    // CRITICAL FIX: Use calculateTotalAdvocateFeeNet which sums (Fees - TDS) for ALL sections/advocates, 
+    // excluding all other charges. This fulfills the snapshot requirement.
     const rawTotalAdvocateFeeNet = calculateTotalAdvocateFeeNet(record);
     const formattedTotalAdvocateFeeNet = rawTotalAdvocateFeeNet.toLocaleString('en-IN', { style: 'currency', currency: 'INR', minimumFractionDigits: 2 });
 
@@ -1080,32 +1073,8 @@ function renderSnapshot(record) {
     SNAPSHOT_BOX.innerHTML = snapshotHTML;
 }
 
-// Helper to render an individual data item
-function renderDataItem(sheetHeader, displayName, value) {
-// ... (renderDataItem unchanged)
-    const item = document.createElement('div');
-    item.className = 'data-block-item';
-
-    const label = document.createElement('span');
-    label.className = 'item-label';
-    label.textContent = `${displayName}:`;
-
-    const dataValue = document.createElement('span');
-    dataValue.className = 'item-value';
-    dataValue.innerHTML = value; // Use innerHTML for formatted currency spans
-
-    if (CRITICAL_FIELDS.includes(sheetHeader)) {
-        dataValue.classList.add('critical-value');
-    }
-
-    item.appendChild(label);
-    item.appendChild(dataValue);
-    return item;
-}
-
 // Helper to process and format value
 function processValue(record, sheetHeader) {
-// ... (processValue unchanged)
     let value = record[sheetHeader] !== undefined ? record[sheetHeader] : 'N/A';
 
     if (DATE_FIELDS.includes(sheetHeader)) {
@@ -1132,9 +1101,30 @@ function processValue(record, sheetHeader) {
     return String(value);
 }
 
+// Helper to render an individual data item
+function renderDataItem(sheetHeader, displayName, value) {
+    const item = document.createElement('div');
+    item.className = 'data-block-item';
+
+    const label = document.createElement('span');
+    label.className = 'item-label';
+    label.textContent = `${displayName}:`;
+
+    const dataValue = document.createElement('span');
+    dataValue.className = 'item-value';
+    dataValue.innerHTML = value; // Use innerHTML for formatted currency spans
+
+    if (CRITICAL_FIELDS.includes(sheetHeader)) {
+        dataValue.classList.add('critical-value');
+    }
+
+    item.appendChild(label);
+    item.appendChild(dataValue);
+    return item;
+}
+
 // Helper to render a group of fields
 function renderFieldGroup(record, fields, container) {
-// ... (renderFieldGroup unchanged)
     for (const sheetHeader in fields) {
         const displayName = fields[sheetHeader];
         const processedValue = processValue(record, sheetHeader);
@@ -1185,7 +1175,6 @@ function renderSubTotals(record, container, definitions, blockTitle) {
 
 // Main rendering function that respects the toggle and adds 4-column styles
 function renderFilteredBlocks(record, showDetailedFees) {
-// ... (renderFilteredBlocks unchanged)
     DATA_BLOCKS_CONTAINER.innerHTML = '';
 
     DISPLAY_BLOCKS.forEach((block, index) => {
@@ -1268,7 +1257,6 @@ ADVOCATE_FEE_TOGGLE.addEventListener('change', () => {
 // ====================================================================
 
 FORM.addEventListener('submit', async function(event) {
-// ... (form submission logic unchanged)
     event.preventDefault();
     MESSAGE_ELEMENT.textContent = 'Submitting...';
 
